@@ -1,13 +1,12 @@
 FROM python:3.11-slim
 
-# Avoid interactive prompts
-ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /app
 
-# Install build tools required for python-multipart (and other libs)
+# Install build tools required by python-multipart
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     build-essential \
@@ -17,17 +16,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Upgrade pip first
 RUN pip install --upgrade pip setuptools wheel
 
-# Copy requirements first to break cache
+# Copy requirements first to break Docker cache
 COPY requirements.txt .
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Now copy the rest of the application
+# Now copy the full project
 COPY . .
 
-# Fly.io expects apps on PORT=8080
+# Fly.io uses 8080 internally
 ENV PORT=8080
 
-# Use Gunicorn with Uvicorn workers
+# Gunicorn binds to 8080
 CMD ["gunicorn", "app.main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8080"]
