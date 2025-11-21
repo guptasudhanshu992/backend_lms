@@ -1,0 +1,14 @@
+app = "your-fastapi-app"
+
+[build]
+  image = ""
+
+[env]
+  # Set env vars on Fly deployment
+  # R2_ENDPOINT = "https://<account_id>.r2.cloudflarestorage.com"
+  # R2_ACCESS_KEY = "..."
+  # R2_SECRET_KEY = "..."
+  # R2_BUCKET = "my-bucket"
+  # DATABASE_URL = "sqlite:///./data.db"  # example
+  # CF_ACCOUNT_ID = "..."
+  # CF_STREAM_TOKEN = "..."

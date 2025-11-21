@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+boto3
+python-dotenv
+databases
+aiosqlite
+sqlalchemy
+httpx
+gunicorn
+aiofiles
