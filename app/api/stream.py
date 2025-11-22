@@ -5,9 +5,9 @@ router = APIRouter()
 
 
 @router.get("/stream/videos")
-async def get_stream_videos():
+def get_stream_videos():
     try:
-        videos = await list_videos()
+        videos = list_videos()
         # return simplified list
         return {"videos": [{"uid": v.get("uid"), "meta": v.get("meta", {})} for v in videos]}
     except Exception as e:
@@ -15,9 +15,9 @@ async def get_stream_videos():
 
 
 @router.post("/stream/videos/store")
-async def store_video(video_id: str, note: str | None = None):
+def store_video(video_id: str, note: str | None = None):
     try:
-        await store_video_reference(video_id, note or "")
+        store_video_reference(video_id, note or "")
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

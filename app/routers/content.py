@@ -149,13 +149,13 @@ class TagUpdate(BaseModel):
 # ===== Courses Management =====
 
 @router.get('/courses', dependencies=[Depends(require_admin)])
-async def list_courses(
+def list_courses(
     skip: int = 0,
     limit: int = 100,
 ):
     """List all courses."""
     query = courses.select().offset(skip).limit(limit).order_by(courses.c.created_at.desc())
-    result = await database.fetch_all(query)
+    result = database.fetch_all(query)
     return {
         "courses": [
             {
@@ -177,7 +177,7 @@ async def list_courses(
 
 
 @router.post('/courses', dependencies=[Depends(require_admin)])
-async def create_course(payload: CourseCreate):
+def create_course(payload: CourseCreate):
     """Create a new course."""
     query = courses.insert().values(
         title=payload.title,
@@ -190,26 +190,26 @@ async def create_course(payload: CourseCreate):
         image_url=payload.image_url,
         published=payload.published,
     )
-    course_id = await database.execute(query)
+    course_id = database.execute(query)
     return {"id": course_id, "message": "Course created successfully"}
 
 
 @router.get('/courses/{course_id}', dependencies=[Depends(require_admin)])
-async def get_course(course_id: int):
+def get_course(course_id: int):
     """Get a specific course."""
     query = courses.select().where(courses.c.id == course_id)
-    course = await database.fetch_one(query)
+    course = database.fetch_one(query)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     return dict(course)
 
 
 @router.put('/courses/{course_id}', dependencies=[Depends(require_admin)])
-async def update_course(course_id: int, payload: CourseUpdate):
+def update_course(course_id: int, payload: CourseUpdate):
     """Update a course."""
     # Check if course exists
     check_query = courses.select().where(courses.c.id == course_id)
-    existing = await database.fetch_one(check_query)
+    existing = database.fetch_one(check_query)
     if not existing:
         raise HTTPException(status_code=404, detail="Course not found")
     
@@ -219,28 +219,28 @@ async def update_course(course_id: int, payload: CourseUpdate):
         raise HTTPException(status_code=400, detail="No fields to update")
     
     query = courses.update().where(courses.c.id == course_id).values(**update_values)
-    await database.execute(query)
+    database.execute(query)
     return {"message": "Course updated successfully"}
 
 
 @router.delete('/courses/{course_id}', dependencies=[Depends(require_admin)])
-async def delete_course(course_id: int):
+def delete_course(course_id: int):
     """Delete a course."""
     query = courses.delete().where(courses.c.id == course_id)
-    await database.execute(query)
+    database.execute(query)
     return {"message": "Course deleted successfully"}
 
 
 # ===== Blog Management =====
 
 @router.get('/blogs', dependencies=[Depends(require_admin)])
-async def list_blogs(
+def list_blogs(
     skip: int = 0,
     limit: int = 100,
 ):
     """List all blog posts."""
     query = blogs.select().offset(skip).limit(limit).order_by(blogs.c.created_at.desc())
-    result = await database.fetch_all(query)
+    result = database.fetch_all(query)
     
     blogs_list = []
     for b in result:
@@ -276,7 +276,7 @@ async def list_blogs(
 
 
 @router.post('/blogs', dependencies=[Depends(require_admin)])
-async def create_blog(payload: BlogCreate):
+def create_blog(payload: BlogCreate):
     """Create a new blog post."""
     # Validate publish_at is in the future if provided
     if payload.publish_at and payload.publish_at <= datetime.utcnow():
@@ -293,12 +293,12 @@ async def create_blog(payload: BlogCreate):
         publish_at=payload.publish_at,
         tags=json.dumps(payload.tags or []),
     )
-    blog_id = await database.execute(query)
+    blog_id = database.execute(query)
     
     # Insert blog-tag relationships
     if payload.tags:
         for tag_id in payload.tags:
-            await database.execute(
+            database.execute(
                 blog_tags.insert().values(blog_id=blog_id, tag_id=tag_id)
             )
     
@@ -306,21 +306,21 @@ async def create_blog(payload: BlogCreate):
 
 
 @router.get('/blogs/{blog_id}', dependencies=[Depends(require_admin)])
-async def get_blog(blog_id: int):
+def get_blog(blog_id: int):
     """Get a specific blog post."""
     query = blogs.select().where(blogs.c.id == blog_id)
-    blog = await database.fetch_one(query)
+    blog = database.fetch_one(query)
     if not blog:
         raise HTTPException(status_code=404, detail="Blog post not found")
     return dict(blog)
 
 
 @router.put('/blogs/{blog_id}', dependencies=[Depends(require_admin)])
-async def update_blog(blog_id: int, payload: BlogUpdate):
+def update_blog(blog_id: int, payload: BlogUpdate):
     """Update a blog post."""
     # Check if blog exists
     check_query = blogs.select().where(blogs.c.id == blog_id)
-    existing = await database.fetch_one(check_query)
+    existing = database.fetch_one(check_query)
     if not existing:
         raise HTTPException(status_code=404, detail="Blog post not found")
     
@@ -334,9 +334,9 @@ async def update_blog(blog_id: int, payload: BlogUpdate):
         if k == 'tags' and v is not None:
             update_values['tags'] = json.dumps(v)
             # Update blog_tags junction table
-            await database.execute(blog_tags.delete().where(blog_tags.c.blog_id == blog_id))
+            database.execute(blog_tags.delete().where(blog_tags.c.blog_id == blog_id))
             for tag_id in v:
-                await database.execute(
+                database.execute(
                     blog_tags.insert().values(blog_id=blog_id, tag_id=tag_id)
                 )
         elif v is not None:
@@ -346,28 +346,28 @@ async def update_blog(blog_id: int, payload: BlogUpdate):
         raise HTTPException(status_code=400, detail="No fields to update")
     
     query = blogs.update().where(blogs.c.id == blog_id).values(**update_values)
-    await database.execute(query)
+    database.execute(query)
     return {"message": "Blog post updated successfully"}
 
 
 @router.delete('/blogs/{blog_id}', dependencies=[Depends(require_admin)])
-async def delete_blog(blog_id: int):
+def delete_blog(blog_id: int):
     """Delete a blog post."""
     # Delete associated blog-tag relationships first
-    await database.execute(blog_tags.delete().where(blog_tags.c.blog_id == blog_id))
+    database.execute(blog_tags.delete().where(blog_tags.c.blog_id == blog_id))
     # Delete the blog
     query = blogs.delete().where(blogs.c.id == blog_id)
-    await database.execute(query)
+    database.execute(query)
     return {"message": "Blog post deleted successfully"}
 
 
 # ===== Categories Management =====
 
 @router.get('/categories', dependencies=[Depends(require_admin)])
-async def list_categories():
+def list_categories():
     """List all categories."""
     query = categories.select().order_by(categories.c.name)
-    result = await database.fetch_all(query)
+    result = database.fetch_all(query)
     return {
         "categories": [
             {
@@ -383,7 +383,7 @@ async def list_categories():
 
 
 @router.post('/categories', dependencies=[Depends(require_admin)])
-async def create_category(payload: CategoryCreate):
+def create_category(payload: CategoryCreate):
     """Create a new category."""
     # Generate slug from name
     slug = payload.name.lower().replace(' ', '-').replace('&', 'and')
@@ -394,17 +394,17 @@ async def create_category(payload: CategoryCreate):
             slug=slug,
             description=payload.description,
         )
-        category_id = await database.execute(query)
+        category_id = database.execute(query)
         return {"id": category_id, "message": "Category created successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail="Category already exists")
 
 
 @router.put('/categories/{category_id}', dependencies=[Depends(require_admin)])
-async def update_category(category_id: int, payload: CategoryUpdate):
+def update_category(category_id: int, payload: CategoryUpdate):
     """Update a category."""
     check_query = categories.select().where(categories.c.id == category_id)
-    existing = await database.fetch_one(check_query)
+    existing = database.fetch_one(check_query)
     if not existing:
         raise HTTPException(status_code=404, detail="Category not found")
     
@@ -419,25 +419,25 @@ async def update_category(category_id: int, payload: CategoryUpdate):
         raise HTTPException(status_code=400, detail="No fields to update")
     
     query = categories.update().where(categories.c.id == category_id).values(**update_values)
-    await database.execute(query)
+    database.execute(query)
     return {"message": "Category updated successfully"}
 
 
 @router.delete('/categories/{category_id}', dependencies=[Depends(require_admin)])
-async def delete_category(category_id: int):
+def delete_category(category_id: int):
     """Delete a category."""
     query = categories.delete().where(categories.c.id == category_id)
-    await database.execute(query)
+    database.execute(query)
     return {"message": "Category deleted successfully"}
 
 
 # ===== Tags Management =====
 
 @router.get('/tags', dependencies=[Depends(require_admin)])
-async def list_tags():
+def list_tags():
     """List all tags."""
     query = tags_table.select().order_by(tags_table.c.name)
-    result = await database.fetch_all(query)
+    result = database.fetch_all(query)
     return {
         "tags": [
             {
@@ -452,7 +452,7 @@ async def list_tags():
 
 
 @router.post('/tags', dependencies=[Depends(require_admin)])
-async def create_tag(payload: TagCreate):
+def create_tag(payload: TagCreate):
     """Create a new tag."""
     # Generate slug from name
     slug = payload.name.lower().replace(' ', '-').replace('&', 'and')
@@ -462,17 +462,17 @@ async def create_tag(payload: TagCreate):
             name=payload.name,
             slug=slug,
         )
-        tag_id = await database.execute(query)
+        tag_id = database.execute(query)
         return {"id": tag_id, "message": "Tag created successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail="Tag already exists")
 
 
 @router.put('/tags/{tag_id}', dependencies=[Depends(require_admin)])
-async def update_tag(tag_id: int, payload: TagUpdate):
+def update_tag(tag_id: int, payload: TagUpdate):
     """Update a tag."""
     check_query = tags_table.select().where(tags_table.c.id == tag_id)
-    existing = await database.fetch_one(check_query)
+    existing = database.fetch_one(check_query)
     if not existing:
         raise HTTPException(status_code=404, detail="Tag not found")
     
@@ -484,16 +484,16 @@ async def update_tag(tag_id: int, payload: TagUpdate):
         name=payload.name,
         slug=slug
     )
-    await database.execute(query)
+    database.execute(query)
     return {"message": "Tag updated successfully"}
 
 
 @router.delete('/tags/{tag_id}', dependencies=[Depends(require_admin)])
-async def delete_tag(tag_id: int):
+def delete_tag(tag_id: int):
     """Delete a tag."""
     # Delete associated blog-tag relationships first
-    await database.execute(blog_tags.delete().where(blog_tags.c.tag_id == tag_id))
+    database.execute(blog_tags.delete().where(blog_tags.c.tag_id == tag_id))
     # Delete the tag
     query = tags_table.delete().where(tags_table.c.id == tag_id)
-    await database.execute(query)
+    database.execute(query)
     return {"message": "Tag deleted successfully"}

@@ -15,12 +15,12 @@ class UserOut(BaseModel):
 
 
 @router.get('/me')
-async def me():
+def me():
     # placeholder: in real app, decode JWT and return user
     return {"ok": True, "user": None}
 
 
 @router.get('/')
-async def list_users():
-    rows = await database.fetch_all(models.users.select())
+def list_users():
+    rows = database.fetch_all(models.users.select())
     return {"users": [dict(r) for r in rows]}

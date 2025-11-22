@@ -4,5 +4,5 @@ router = APIRouter()
 
 
 @router.get("/hello")
-async def hello_world():
+def hello_world():
     return {"message": "Hello World from FastAPI"}

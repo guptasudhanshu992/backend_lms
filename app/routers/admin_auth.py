@@ -12,7 +12,7 @@ class AdminLoginRequest(BaseModel):
 
 
 @router.post('/login')
-async def admin_login(payload: AdminLoginRequest):
+def admin_login(payload: AdminLoginRequest):
     """
     Admin login using credentials from .env file.
     Does not require database lookup.

@@ -28,23 +28,23 @@ class LoginIn(BaseModel):
 
 
 @router.post('/register')
-async def register(payload: RegisterIn):
+def register(payload: RegisterIn):
     try:
-        user = await auth_service.register_user(payload.email, payload.password, payload.consent)
+        user = auth_service.register_user(payload.email, payload.password, payload.consent)
         return {"ok": True, "user": {"id": user.id, "email": user.email}}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post('/login')
-async def login(payload: LoginIn, request: Request, response: Response):
-    data = await auth_service.authenticate_user(payload.email, payload.password, user_agent=request.headers.get('user-agent'), ip=request.client.host)
+def login(payload: LoginIn, request: Request, response: Response):
+    data = auth_service.authenticate_user(payload.email, payload.password, user_agent=request.headers.get('user-agent'), ip=request.client.host)
     if not data:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     # Fetch user data to return in response
     user_query = users.select().where(users.c.email == payload.email)
-    user_data = await database.fetch_one(user_query)
+    user_data = database.fetch_one(user_query)
     
     # set refresh token as httpOnly cookie
     response.set_cookie("refresh_token", data['refresh_token'], httponly=True, secure=not settings.DEBUG, samesite='lax')
@@ -69,7 +69,7 @@ class RefreshTokenIn(BaseModel):
 
 
 @router.post('/refresh')
-async def refresh(
+def refresh(
     response: Response, 
     payload: Optional[RefreshTokenIn] = None,
     refresh_token_cookie: str | None = Cookie(None, alias="refresh_token")
@@ -83,7 +83,7 @@ async def refresh(
     
     if not refresh_token:
         raise HTTPException(status_code=401, detail="Missing refresh token")
-    data = await auth_service.refresh_tokens(refresh_token)
+    data = auth_service.refresh_tokens(refresh_token)
     if not data:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
     response.set_cookie("refresh_token", data['refresh_token'], httponly=True, secure=not settings.DEBUG, samesite='lax')
@@ -91,15 +91,15 @@ async def refresh(
 
 
 @router.post('/logout')
-async def logout(response: Response, refresh_token: str | None = Cookie(None)):
+def logout(response: Response, refresh_token: str | None = Cookie(None)):
     if refresh_token:
-        await auth_service.logout(refresh_token)
+        auth_service.logout(refresh_token)
     response.delete_cookie("refresh_token")
     return {"ok": True}
 
 
 @router.post('/forgot-password')
-async def forgot_password(
+def forgot_password(
     email: EmailStr,
     request: Request,
 ):
@@ -109,7 +109,7 @@ async def forgot_password(
     """
     # Find user by email
     query = users.select().where(users.c.email == email)
-    user = await database.fetch_one(query)
+    user = database.fetch_one(query)
     
     if user:
         # Generate reset token (1 hour expiry)
@@ -122,11 +122,11 @@ async def forgot_password(
             expires_at=datetime.utcnow() + timedelta(hours=1),
             created_at=datetime.utcnow(),
         )
-        await database.execute(insert_query)
+        database.execute(insert_query)
         
         # Send reset email
         try:
-            await send_password_reset_email(
+            send_password_reset_email(
                 email=user["email"],
                 reset_token=token,
             )
@@ -140,7 +140,7 @@ async def forgot_password(
 
 
 @router.post('/reset-password')
-async def reset_password(
+def reset_password(
     token: str,
     new_password: str,
     request: Request,
@@ -164,14 +164,14 @@ async def reset_password(
         (password_reset_tokens.c.used_at == None) &
         (password_reset_tokens.c.expires_at > datetime.utcnow())
     )
-    token_record = await database.fetch_one(query)
+    token_record = database.fetch_one(query)
     
     if not token_record:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
     
     # Get user
     user_query = users.select().where(users.c.id == user_id)
-    user = await database.fetch_one(user_query)
+    user = database.fetch_one(user_query)
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -183,7 +183,7 @@ async def reset_password(
     ).values(
         hashed_password=hashed_password,
     )
-    await database.execute(update_query)
+    database.execute(update_query)
     
     # Mark token as used
     mark_used_query = password_reset_tokens.update().where(
@@ -191,11 +191,11 @@ async def reset_password(
     ).values(
         used_at=datetime.utcnow(),
     )
-    await database.execute(mark_used_query)
+    database.execute(mark_used_query)
     
     # Send security notification
     try:
-        await send_security_notification(
+        send_security_notification(
             email=user["email"],
             notification_type="Password Changed",
             details="Your password was successfully reset.",
@@ -210,7 +210,7 @@ async def reset_password(
 
 
 @router.get('/verify-email')
-async def verify_email(token: str):
+def verify_email(token: str):
     """
     Verify email address using token from email.
     """
@@ -230,7 +230,7 @@ async def verify_email(token: str):
         (email_verification_tokens.c.used_at == None) &
         (email_verification_tokens.c.expires_at > datetime.utcnow())
     )
-    token_record = await database.fetch_one(query)
+    token_record = database.fetch_one(query)
     
     if not token_record:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
@@ -241,7 +241,7 @@ async def verify_email(token: str):
     ).values(
         is_verified=True,
     )
-    await database.execute(update_query)
+    database.execute(update_query)
     
     # Mark token as used
     mark_used_query = email_verification_tokens.update().where(
@@ -249,13 +249,13 @@ async def verify_email(token: str):
     ).values(
         used_at=datetime.utcnow(),
     )
-    await database.execute(mark_used_query)
+    database.execute(mark_used_query)
     
     return {"ok": True, "message": "Email verified successfully"}
 
 
 @router.get('/oauth/google')
-async def oauth_google_login():
+def oauth_google_login():
     """
     Redirect to Google OAuth authorization.
     """
@@ -269,7 +269,7 @@ async def oauth_google_login():
 
 
 @router.get('/oauth/google/callback')
-async def oauth_google_callback(
+def oauth_google_callback(
     code: str,
     state: str,
     request: Request,
@@ -282,17 +282,17 @@ async def oauth_google_callback(
     
     try:
         # Exchange code for user info
-        oauth_data = await oauth_service.exchange_google_code(code)
+        oauth_data = oauth_service.exchange_google_code(code)
         
         # Find or create user
-        user = await oauth_service.find_or_create_oauth_user(
+        user = oauth_service.find_or_create_oauth_user(
             oauth_data=oauth_data,
             ip_address=request.client.host,
             user_agent=request.headers.get("user-agent"),
         )
         
         # Generate tokens
-        data = await auth_service.authenticate_user(
+        data = auth_service.authenticate_user(
             user["email"],
             None,  # No password needed for OAuth
             user_agent=request.headers.get("user-agent"),
@@ -323,7 +323,7 @@ async def oauth_google_callback(
 
 
 @router.get('/oauth/linkedin')
-async def oauth_linkedin_login():
+def oauth_linkedin_login():
     """
     Redirect to LinkedIn OAuth authorization.
     """
@@ -337,7 +337,7 @@ async def oauth_linkedin_login():
 
 
 @router.get('/oauth/linkedin/callback')
-async def oauth_linkedin_callback(
+def oauth_linkedin_callback(
     code: str,
     state: str,
     request: Request,
@@ -350,17 +350,17 @@ async def oauth_linkedin_callback(
     
     try:
         # Exchange code for user info
-        oauth_data = await oauth_service.exchange_linkedin_code(code)
+        oauth_data = oauth_service.exchange_linkedin_code(code)
         
         # Find or create user
-        user = await oauth_service.find_or_create_oauth_user(
+        user = oauth_service.find_or_create_oauth_user(
             oauth_data=oauth_data,
             ip_address=request.client.host,
             user_agent=request.headers.get("user-agent"),
         )
         
         # Generate tokens
-        data = await auth_service.authenticate_user(
+        data = auth_service.authenticate_user(
             user["email"],
             None,  # No password needed for OAuth
             user_agent=request.headers.get("user-agent"),

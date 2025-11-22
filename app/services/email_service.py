@@ -7,7 +7,7 @@ from app.config.settings import settings
 logger = logging.getLogger("lms.email")
 
 
-async def send_email(to: str, subject: str, body: str, html_body: Optional[str] = None):
+def send_email(to: str, subject: str, body: str, html_body: Optional[str] = None):
     """
     Send email using SMTP or provider API.
     Currently logs email content. Replace with actual SMTP implementation.
@@ -37,7 +37,7 @@ async def send_email(to: str, subject: str, body: str, html_body: Optional[str] 
     return True
 
 
-async def send_verification_email(to: str, token: str):
+def send_verification_email(to: str, token: str):
     """Send email verification link"""
     verify_url = f"{settings.FRONTEND_ORIGIN}/verify-email?token={token}"
     subject = "Verify your email"
@@ -64,10 +64,10 @@ LMS Team
       </body>
     </html>
     """
-    return await send_email(to, subject, body, html_body)
+    return send_email(to, subject, body, html_body)
 
 
-async def send_password_reset_email(to: str, token: str):
+def send_password_reset_email(to: str, token: str):
     """Send password reset link"""
     reset_url = f"{settings.FRONTEND_ORIGIN}/reset-password?token={token}"
     subject = "Reset your password"
@@ -97,10 +97,10 @@ LMS Team
       </body>
     </html>
     """
-    return await send_email(to, subject, body, html_body)
+    return send_email(to, subject, body, html_body)
 
 
-async def send_security_notification(to: str, event: str, details: str):
+def send_security_notification(to: str, event: str, details: str):
     """Send security notification email"""
     subject = f"Security Alert: {event}"
     body = f"""
@@ -126,4 +126,4 @@ LMS Team
       </body>
     </html>
     """
-    return await send_email(to, subject, body, html_body)
+    return send_email(to, subject, body, html_body)

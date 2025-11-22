@@ -6,10 +6,10 @@ router = APIRouter()
 
 
 @router.post("/r2/upload")
-async def upload_to_r2(file: UploadFile = File(...)):
+def upload_to_r2(file: UploadFile = File(...)):
     # read into memory stream (small demo). For production, stream to disk or S3 multipart.
     try:
-        contents = await file.read()
+        contents = file.file.read()
         key, url = upload_fileobj(contents, filename=file.filename)
         return {"key": key, "url": url}
     except Exception as e:

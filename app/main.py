@@ -92,7 +92,7 @@ async def startup_event():
     logger.info("startup_event: starting init_db")
     t0 = time.time()
     try:
-        await d1_service.init_db()
+        d1_service.init_db()
     except Exception as e:
         logger.exception("startup_event: init_db failed: %s", e)
     finally:
@@ -101,7 +101,7 @@ async def startup_event():
     # Bootstrap admin user from .env
     logger.info("startup_event: bootstrapping admin user")
     try:
-        await bootstrap_admin()
+        bootstrap_admin()
     except Exception as e:
         logger.exception("startup_event: bootstrap_admin failed: %s", e)
     

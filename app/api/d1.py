@@ -11,24 +11,24 @@ class MessageIn(BaseModel):
 
 
 @router.on_event("startup")
-async def _connect_db():
+def _connect_db():
     if not database._connected:
-        await database.connect()
+        database.connect()
 
 
 @router.post("/d1/messages")
-async def post_message(msg: MessageIn):
+def post_message(msg: MessageIn):
     try:
-        await create_message(msg.content, msg.video_id)
+        create_message(msg.content, msg.video_id)
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/d1/messages")
-async def get_messages():
+def get_messages():
     try:
-        msgs = await list_messages()
+        msgs = list_messages()
         return {"messages": [dict(m) for m in msgs]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

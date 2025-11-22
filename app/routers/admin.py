@@ -64,7 +64,7 @@ class GroupMembership(BaseModel):
 # ===== Auth Verification =====
 
 @router.get('/me', dependencies=[Depends(require_admin)])
-async def get_current_admin(current_user: dict = Depends(get_current_user)):
+def get_current_admin(current_user: dict = Depends(get_current_user)):
     """Get current authenticated admin user info."""
     return {
         "id": current_user.get("user_id") or current_user.get("id"),
@@ -77,20 +77,20 @@ async def get_current_admin(current_user: dict = Depends(get_current_user)):
 # ===== Dashboard Stats =====
 
 @router.get('/stats', dependencies=[Depends(require_admin)])
-async def get_admin_stats():
+def get_admin_stats():
     """Get dashboard statistics."""
     # Count total users
-    total_users = await database.fetch_val(
+    total_users = database.fetch_val(
         query="SELECT COUNT(*) FROM users"
     )
     
     # Count active sessions (not revoked and not expired)
-    active_sessions = await database.fetch_val(
+    active_sessions = database.fetch_val(
         query="SELECT COUNT(*) FROM sessions WHERE revoked = 0 AND expires_at > datetime('now')"
     )
     
     # Count audit logs
-    total_audit_logs = await database.fetch_val(
+    total_audit_logs = database.fetch_val(
         query="SELECT COUNT(*) FROM audit_logs"
     )
     
@@ -105,7 +105,7 @@ async def get_admin_stats():
 # ===== User Management =====
 
 @router.get('/users', dependencies=[Depends(require_admin)])
-async def list_users(
+def list_users(
     skip: int = 0,
     limit: int = 100,
     role: Optional[str] = None,
@@ -121,7 +121,7 @@ async def list_users(
     
     query = query.offset(skip).limit(limit)
     
-    result = await database.fetch_all(query)
+    result = database.fetch_all(query)
     return {
         "users": [
             {
@@ -141,11 +141,11 @@ async def list_users(
 
 
 @router.post('/users', dependencies=[Depends(require_admin)])
-async def create_user(payload: UserCreate):
+def create_user(payload: UserCreate):
     """Create a new user."""
     # Check if exists
     check_query = users.select().where(users.c.email == payload.email)
-    existing = await database.fetch_one(check_query)
+    existing = database.fetch_one(check_query)
     
     if existing:
         raise HTTPException(status_code=400, detail="User already exists")
@@ -164,20 +164,20 @@ async def create_user(payload: UserCreate):
         created_at=datetime.utcnow(),
     )
     
-    user_id = await database.execute(insert_query)
+    user_id = database.execute(insert_query)
     
     # Fetch created user
     query = users.select().where(users.c.id == user_id)
-    user = await database.fetch_one(query)
+    user = database.fetch_one(query)
     
     return {"user": dict(user)}
 
 
 @router.get('/users/{user_id}', dependencies=[Depends(require_admin)])
-async def get_user(user_id: int):
+def get_user(user_id: int):
     """Get user details."""
     query = users.select().where(users.c.id == user_id)
-    user = await database.fetch_one(query)
+    user = database.fetch_one(query)
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -186,7 +186,7 @@ async def get_user(user_id: int):
 
 
 @router.patch('/users/{user_id}', dependencies=[Depends(require_admin)])
-async def update_user(user_id: int, payload: UserUpdate):
+def update_user(user_id: int, payload: UserUpdate):
     """Update user details."""
     update_values = {}
     
@@ -206,29 +206,29 @@ async def update_user(user_id: int, payload: UserUpdate):
         users.c.id == user_id
     ).values(**update_values)
     
-    await database.execute(update_query)
+    database.execute(update_query)
     
     # Fetch updated user
     query = users.select().where(users.c.id == user_id)
-    user = await database.fetch_one(query)
+    user = database.fetch_one(query)
     
     return {"user": dict(user)}
 
 
 @router.delete('/users/{user_id}', dependencies=[Depends(require_admin)])
-async def delete_user(user_id: int, hard_delete: bool = False):
+def delete_user(user_id: int, hard_delete: bool = False):
     """Delete user account (soft delete by default)."""
-    result = await gdpr_service.delete_user_account(user_id, hard_delete=hard_delete)
+    result = gdpr_service.delete_user_account(user_id, hard_delete=hard_delete)
     return result
 
 
 # ===== Role Management =====
 
 @router.get('/roles', dependencies=[Depends(require_admin)])
-async def list_roles():
+def list_roles():
     """List all roles."""
     import json
-    result = await permission_service.get_all_roles()
+    result = permission_service.get_all_roles()
     # Parse permissions JSON string to array for frontend
     for role in result:
         if isinstance(role.get('permissions'), str):
@@ -240,10 +240,10 @@ async def list_roles():
 
 
 @router.post('/roles', dependencies=[Depends(require_admin)])
-async def create_role(payload: RoleCreate):
+def create_role(payload: RoleCreate):
     """Create a new role."""
     try:
-        role = await permission_service.create_role(
+        role = permission_service.create_role(
             name=payload.name,
             permissions=payload.permissions,
             description=payload.description,
@@ -254,10 +254,10 @@ async def create_role(payload: RoleCreate):
 
 
 @router.patch('/roles/{role_id}', dependencies=[Depends(require_admin)])
-async def update_role(role_id: int, payload: RoleUpdate):
+def update_role(role_id: int, payload: RoleUpdate):
     """Update role permissions or description."""
     try:
-        role = await permission_service.update_role(
+        role = permission_service.update_role(
             role_id=role_id,
             permissions=payload.permissions,
             description=payload.description,
@@ -268,10 +268,10 @@ async def update_role(role_id: int, payload: RoleUpdate):
 
 
 @router.delete('/roles/{role_id}', dependencies=[Depends(require_admin)])
-async def delete_role(role_id: int):
+def delete_role(role_id: int):
     """Delete a role."""
     try:
-        await permission_service.delete_role(role_id)
+        permission_service.delete_role(role_id)
         return {"ok": True, "message": "Role deleted"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -280,16 +280,16 @@ async def delete_role(role_id: int):
 # ===== Group Management =====
 
 @router.get('/groups', dependencies=[Depends(require_admin)])
-async def list_groups():
+def list_groups():
     """List all groups."""
-    result = await permission_service.get_all_groups()
+    result = permission_service.get_all_groups()
     return {"groups": result}
 
 
 @router.post('/groups', dependencies=[Depends(require_admin)])
-async def create_group(payload: GroupCreate):
+def create_group(payload: GroupCreate):
     """Create a new group."""
-    group = await permission_service.create_group(
+    group = permission_service.create_group(
         name=payload.name,
         permissions=payload.permissions,
         description=payload.description,
@@ -298,10 +298,10 @@ async def create_group(payload: GroupCreate):
 
 
 @router.patch('/groups/{group_id}', dependencies=[Depends(require_admin)])
-async def update_group(group_id: int, payload: GroupUpdate):
+def update_group(group_id: int, payload: GroupUpdate):
     """Update group permissions or description."""
     try:
-        group = await permission_service.update_group(
+        group = permission_service.update_group(
             group_id=group_id,
             permissions=payload.permissions,
             description=payload.description,
@@ -312,16 +312,16 @@ async def update_group(group_id: int, payload: GroupUpdate):
 
 
 @router.delete('/groups/{group_id}', dependencies=[Depends(require_admin)])
-async def delete_group(group_id: int):
+def delete_group(group_id: int):
     """Delete a group."""
-    await permission_service.delete_group(group_id)
+    permission_service.delete_group(group_id)
     return {"ok": True, "message": "Group deleted"}
 
 
 @router.post('/groups/members', dependencies=[Depends(require_admin)])
-async def add_user_to_group(payload: GroupMembership):
+def add_user_to_group(payload: GroupMembership):
     """Add user to a group."""
-    await permission_service.add_user_to_group(
+    permission_service.add_user_to_group(
         user_id=payload.user_id,
         group_id=payload.group_id,
     )
@@ -329,9 +329,9 @@ async def add_user_to_group(payload: GroupMembership):
 
 
 @router.delete('/groups/members', dependencies=[Depends(require_admin)])
-async def remove_user_from_group(payload: GroupMembership):
+def remove_user_from_group(payload: GroupMembership):
     """Remove user from a group."""
-    await permission_service.remove_user_from_group(
+    permission_service.remove_user_from_group(
         user_id=payload.user_id,
         group_id=payload.group_id,
     )
@@ -341,9 +341,9 @@ async def remove_user_from_group(payload: GroupMembership):
 # ===== Permission Management =====
 
 @router.post('/permissions/grant', dependencies=[Depends(require_admin)])
-async def grant_permission(payload: PermissionGrant):
+def grant_permission(payload: PermissionGrant):
     """Grant a permission to a user."""
-    await permission_service.grant_user_permission(
+    permission_service.grant_user_permission(
         user_id=payload.user_id,
         permission=payload.permission,
     )
@@ -351,9 +351,9 @@ async def grant_permission(payload: PermissionGrant):
 
 
 @router.post('/permissions/revoke', dependencies=[Depends(require_admin)])
-async def revoke_permission(payload: PermissionGrant):
+def revoke_permission(payload: PermissionGrant):
     """Revoke a permission from a user."""
-    await permission_service.revoke_user_permission(
+    permission_service.revoke_user_permission(
         user_id=payload.user_id,
         permission=payload.permission,
     )
@@ -361,16 +361,16 @@ async def revoke_permission(payload: PermissionGrant):
 
 
 @router.get('/permissions/user/{user_id}', dependencies=[Depends(require_admin)])
-async def get_user_permissions(user_id: int):
+def get_user_permissions(user_id: int):
     """Get all permissions for a user."""
-    perms = await permission_service.get_user_permissions(user_id)
+    perms = permission_service.get_user_permissions(user_id)
     return {"user_id": user_id, "permissions": list(perms)}
 
 
 # ===== Session Management =====
 
 @router.get('/sessions', dependencies=[Depends(require_admin)])
-async def list_sessions(
+def list_sessions(
     user_id: Optional[int] = None,
     is_active: Optional[bool] = None,
     skip: int = 0,
@@ -386,7 +386,7 @@ async def list_sessions(
     
     query = query.order_by(sessions.c.created_at.desc()).offset(skip).limit(limit)
     
-    result = await database.fetch_all(query)
+    result = database.fetch_all(query)
     return {
         "sessions": [
             {
@@ -407,7 +407,7 @@ async def list_sessions(
 
 
 @router.post('/sessions/{session_id}/revoke', dependencies=[Depends(require_admin)])
-async def revoke_session(session_id: int):
+def revoke_session(session_id: int):
     """Revoke a specific session."""
     update_query = sessions.update().where(
         sessions.c.id == session_id
@@ -415,7 +415,7 @@ async def revoke_session(session_id: int):
         is_active=False,
         revoked_at=datetime.utcnow(),
     )
-    await database.execute(update_query)
+    database.execute(update_query)
     
     return {"ok": True, "message": "Session revoked"}
 
@@ -423,7 +423,7 @@ async def revoke_session(session_id: int):
 # ===== Audit Logs =====
 
 @router.get('/audit-logs', dependencies=[Depends(require_admin)])
-async def list_audit_logs(
+def list_audit_logs(
     user_id: Optional[int] = None,
     action: Optional[str] = None,
     skip: int = 0,
@@ -440,7 +440,7 @@ async def list_audit_logs(
     
     query = query.order_by(audit_logs.c.created_at.desc()).offset(skip).limit(limit)
     
-    result = await database.fetch_all(query)
+    result = database.fetch_all(query)
     return {
         "logs": [
             {

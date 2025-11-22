@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 # ===== Public Blog Endpoints =====
 
 @router.get('/blogs')
-async def list_public_blogs(limit: int = 20, offset: int = 0):
+def list_public_blogs(limit: int = 20, offset: int = 0):
     """List published blog posts (public endpoint) with pagination."""
     try:
         # Use raw SQL to safely handle missing columns
@@ -21,11 +21,11 @@ async def list_public_blogs(limit: int = 20, offset: int = 0):
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
         """
-        result = await database.fetch_all(query_text, {"limit": limit, "offset": offset})
+        result = database.fetch_all(query_text, {"limit": limit, "offset": offset})
         
         # Get total count
         count_query = "SELECT COUNT(*) as total FROM blogs WHERE published = TRUE"
-        total_result = await database.fetch_one(count_query)
+        total_result = database.fetch_one(count_query)
         total = total_result["total"] if total_result else 0
         
         logger.info(f"Fetched {len(result)} of {total} published blogs")
@@ -54,10 +54,10 @@ async def list_public_blogs(limit: int = 20, offset: int = 0):
 
 
 @router.get('/blogs/{blog_id}')
-async def get_public_blog(blog_id: int):
+def get_public_blog(blog_id: int):
     """Get a specific published blog post (public endpoint)."""
     query = text("SELECT * FROM blogs WHERE id = :blog_id AND published = TRUE")
-    blog = await database.fetch_one(query, {"blog_id": blog_id})
+    blog = database.fetch_one(query, {"blog_id": blog_id})
     if not blog:
         raise HTTPException(status_code=404, detail="Blog post not found")
     return {
@@ -76,15 +76,15 @@ async def get_public_blog(blog_id: int):
 # ===== Public Courses Endpoints =====
 
 @router.get('/courses')
-async def list_public_courses(limit: int = 20, offset: int = 0):
+def list_public_courses(limit: int = 20, offset: int = 0):
     """List published courses (public endpoint) with pagination."""
     try:
         query = text("SELECT * FROM courses WHERE published = TRUE ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
-        result = await database.fetch_all(query, {"limit": limit, "offset": offset})
+        result = database.fetch_all(query, {"limit": limit, "offset": offset})
         
         # Get total count
         count_query = text("SELECT COUNT(*) as total FROM courses WHERE published = TRUE")
-        total_result = await database.fetch_one(count_query)
+        total_result = database.fetch_one(count_query)
         total = total_result["total"] if total_result else 0
         
         logger.info(f"Fetched {len(result)} of {total} published courses")
@@ -114,10 +114,10 @@ async def list_public_courses(limit: int = 20, offset: int = 0):
 
 
 @router.get('/courses/{course_id}')
-async def get_public_course(course_id: int):
+def get_public_course(course_id: int):
     """Get a specific published course (public endpoint)."""
     query = text("SELECT * FROM courses WHERE id = :course_id AND published = TRUE")
-    course = await database.fetch_one(query, {"course_id": course_id})
+    course = database.fetch_one(query, {"course_id": course_id})
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     return {

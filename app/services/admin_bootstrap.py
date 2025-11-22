@@ -8,7 +8,7 @@ from app import models
 logger = logging.getLogger("lms.admin")
 
 
-async def bootstrap_admin():
+def bootstrap_admin():
     """
     Create admin user from environment variables if it doesn't exist.
     This runs on application startup.
@@ -18,7 +18,7 @@ async def bootstrap_admin():
         admin_query = models.users.select().where(
             models.users.c.email == settings.ADMIN_EMAIL
         )
-        existing_admin = await database.fetch_one(admin_query)
+        existing_admin = database.fetch_one(admin_query)
         
         if existing_admin:
             logger.info(f"Admin user already exists: {settings.ADMIN_EMAIL}")
@@ -36,11 +36,11 @@ async def bootstrap_admin():
             consent=True
         )
         
-        user_id = await database.execute(insert_query)
+        user_id = database.execute(insert_query)
         logger.info(f"✅ Admin user created: {settings.ADMIN_EMAIL} (ID: {user_id})")
         
         # Fetch and return the created user
-        new_admin = await database.fetch_one(
+        new_admin = database.fetch_one(
             models.users.select().where(models.users.c.id == user_id)
         )
         

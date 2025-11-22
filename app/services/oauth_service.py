@@ -7,11 +7,11 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 
 try:
-    from authlib.integrations.httpx_client import AsyncOAuth2Client
+    from authlib.integrations.httpx_client import OAuth2Client
     AUTHLIB_AVAILABLE = True
 except ImportError:
     AUTHLIB_AVAILABLE = False
-    AsyncOAuth2Client = None
+    OAuth2Client = None
 
 from app.config.settings import settings
 from app.models import users
@@ -50,7 +50,7 @@ class OAuthService:
         if not AUTHLIB_AVAILABLE:
             raise RuntimeError("Authlib not available")
         
-        client = AsyncOAuth2Client(
+        client = OAuth2Client(
             client_id=self.google_client_id,
             redirect_uri=self.google_redirect_uri,
         )
@@ -67,7 +67,7 @@ class OAuthService:
         if not AUTHLIB_AVAILABLE:
             raise RuntimeError("Authlib not available")
         
-        client = AsyncOAuth2Client(
+        client = OAuth2Client(
             client_id=self.linkedin_client_id,
             redirect_uri=self.linkedin_redirect_uri,
         )
@@ -84,21 +84,21 @@ class OAuthService:
         if not AUTHLIB_AVAILABLE:
             raise RuntimeError("Authlib not available")
         
-        client = AsyncOAuth2Client(
+        client = OAuth2Client(
             client_id=self.google_client_id,
             client_secret=self.google_client_secret,
             redirect_uri=self.google_redirect_uri,
         )
         
         # Exchange code for token
-        token = await client.fetch_token(
+        token = client.fetch_token(
             self.google_token_url,
             code=code,
             grant_type="authorization_code",
         )
         
         # Fetch user info
-        resp = await client.get(
+        resp = client.get(
             self.google_userinfo_url,
             token=token,
         )
@@ -112,26 +112,26 @@ class OAuthService:
             "picture": user_info.get("picture", ""),
         }
     
-    async def exchange_linkedin_code(self, code: str) -> Dict[str, Any]:
+    def exchange_linkedin_code(self, code: str) -> Dict[str, Any]:
         """Exchange LinkedIn authorization code for access token and user info."""
         if not AUTHLIB_AVAILABLE:
             raise RuntimeError("Authlib not available")
         
-        client = AsyncOAuth2Client(
+        client = OAuth2Client(
             client_id=self.linkedin_client_id,
             client_secret=self.linkedin_client_secret,
             redirect_uri=self.linkedin_redirect_uri,
         )
         
         # Exchange code for token
-        token = await client.fetch_token(
+        token = client.fetch_token(
             self.linkedin_token_url,
             code=code,
             grant_type="authorization_code",
         )
         
         # Fetch user info
-        resp = await client.get(
+        resp = client.get(
             self.linkedin_userinfo_url,
             token=token,
         )
@@ -166,7 +166,7 @@ class OAuthService:
             (users.c.oauth_provider == provider) &
             (users.c.oauth_provider_id == provider_id)
         )
-        existing_user = await database.fetch_one(query)
+        existing_user = database.fetch_one(query)
         
         if existing_user:
             # User exists with this OAuth account
@@ -178,13 +178,13 @@ class OAuthService:
             ).values(
                 last_login=datetime.utcnow(),
             )
-            await database.execute(update_query)
+            database.execute(update_query)
             
             return dict(existing_user)
         
         # Check if user with this email exists (link OAuth to existing account)
         query = users.select().where(users.c.email == email)
-        existing_email_user = await database.fetch_one(query)
+        existing_email_user = database.fetch_one(query)
         
         if existing_email_user:
             # Link OAuth provider to existing account
@@ -199,11 +199,11 @@ class OAuthService:
                 is_verified=True,  # OAuth emails are verified by provider
                 last_login=datetime.utcnow(),
             )
-            await database.execute(update_query)
+            database.execute(update_query)
             
             # Send security notification about OAuth link
             try:
-                await send_security_notification(
+                send_security_notification(
                     email=email,
                     notification_type=f"{provider.title()} Account Linked",
                     details=f"Your {provider.title()} account was linked to your profile.",
@@ -237,11 +237,11 @@ class OAuthService:
             last_login=datetime.utcnow(),
         )
         
-        user_id = await database.execute(insert_query)
+        user_id = database.execute(insert_query)
         
         # Fetch created user
         query = users.select().where(users.c.id == user_id)
-        new_user = await database.fetch_one(query)
+        new_user = database.fetch_one(query)
         
         return dict(new_user)
 

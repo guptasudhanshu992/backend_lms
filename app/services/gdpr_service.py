@@ -22,7 +22,7 @@ class GDPRService:
         """
         # Get user data
         user_query = users.select().where(users.c.id == user_id)
-        user = await database.fetch_one(user_query)
+        user = database.fetch_one(user_query)
         
         if not user:
             raise ValueError(f"User {user_id} not found")
@@ -46,7 +46,7 @@ class GDPRService:
         sessions_query = sessions.select().where(
             sessions.c.user_id == user_id
         ).order_by(sessions.c.created_at.desc())
-        session_records = await database.fetch_all(sessions_query)
+        session_records = database.fetch_all(sessions_query)
         
         sessions_data = [
             {
@@ -69,7 +69,7 @@ class GDPRService:
         audit_query = audit_logs.select().where(
             audit_logs.c.user_id == user_id
         ).order_by(audit_logs.c.timestamp.desc())
-        audit_records = await database.fetch_all(audit_query)
+        audit_records = database.fetch_all(audit_query)
         
         audit_data = [
             {
@@ -113,7 +113,7 @@ class GDPRService:
         """
         # Get user
         user_query = users.select().where(users.c.id == user_id)
-        user = await database.fetch_one(user_query)
+        user = database.fetch_one(user_query)
         
         if not user:
             raise ValueError(f"User {user_id} not found")
@@ -126,7 +126,7 @@ class GDPRService:
             delete_sessions = sessions.delete().where(
                 sessions.c.user_id == user_id
             )
-            await database.execute(delete_sessions)
+            database.execute(delete_sessions)
             
             # Anonymize audit logs (keep for compliance but remove PII)
             anonymize_audit = audit_logs.update().where(
@@ -136,11 +136,11 @@ class GDPRService:
                 ip_address="<deleted>",
                 user_agent="<deleted>",
             )
-            await database.execute(anonymize_audit)
+            database.execute(anonymize_audit)
             
             # Delete user
             delete_user = users.delete().where(users.c.id == user_id)
-            await database.execute(delete_user)
+            database.execute(delete_user)
             
             logger.info(f"User {user_id} HARD DELETED")
             return {
@@ -170,7 +170,7 @@ class GDPRService:
                 two_factor_enabled=False,
                 consent=False,
             )
-            await database.execute(anonymize_user)
+            database.execute(anonymize_user)
             
             # Revoke all sessions
             revoke_sessions = sessions.update().where(
@@ -179,7 +179,7 @@ class GDPRService:
                 is_active=False,
                 revoked_at=datetime.utcnow(),
             )
-            await database.execute(revoke_sessions)
+            database.execute(revoke_sessions)
             
             # Anonymize audit logs
             anonymize_audit = audit_logs.update().where(
@@ -188,7 +188,7 @@ class GDPRService:
                 ip_address="<anonymized>",
                 user_agent="<anonymized>",
             )
-            await database.execute(anonymize_audit)
+            database.execute(anonymize_audit)
             
             logger.info(f"User {user_id} SOFT DELETED (anonymized)")
             return {
@@ -202,7 +202,7 @@ class GDPRService:
     async def get_consent_status(self, user_id: int) -> Dict[str, Any]:
         """Get user's consent status."""
         user_query = users.select().where(users.c.id == user_id)
-        user = await database.fetch_one(user_query)
+        user = database.fetch_one(user_query)
         
         if not user:
             raise ValueError(f"User {user_id} not found")
@@ -224,7 +224,7 @@ class GDPRService:
         ).values(
             consent=consent,
         )
-        await database.execute(update_query)
+        database.execute(update_query)
         
         logger.info(f"User {user_id} consent updated to: {consent}")
         

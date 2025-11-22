@@ -40,15 +40,15 @@ class DatabaseWrapper:
     def __init__(self):
         self._connected = False
     
-    async def connect(self):
+    def connect(self):
         """Connect to database (no-op as connection is managed by pool)"""
         self._connected = True
     
-    async def disconnect(self):
+    def disconnect(self):
         """Disconnect from database (connections returned to pool automatically)"""
         self._connected = False
     
-    async def execute(self, query, values=None):
+    def execute(self, query, values=None):
         """Execute a query and return result"""
         connection = get_connection()
         try:
@@ -70,7 +70,7 @@ class DatabaseWrapper:
         finally:
             connection.close()
     
-    async def fetch_all(self, query, values=None):
+    def fetch_all(self, query, values=None):
         """Fetch all rows from a query"""
         connection = get_connection()
         try:
@@ -88,7 +88,7 @@ class DatabaseWrapper:
         finally:
             connection.close()
     
-    async def fetch_one(self, query, values=None):
+    def fetch_one(self, query, values=None):
         """Fetch one row from a query"""
         connection = get_connection()
         try:
@@ -105,12 +105,30 @@ class DatabaseWrapper:
             raise
         finally:
             connection.close()
+    
+    def fetch_val(self, query, values=None):
+        """Fetch a single value from a query"""
+        connection = get_connection()
+        try:
+            # Handle both text queries and SQLAlchemy selectables
+            if isinstance(query, str):
+                query = text(query)
+            
+            result = connection.execute(query, values or {})
+            row = result.fetchone()
+            return row[0] if row else None
+        except Exception as e:
+            connection.rollback()
+            logger.error(f"Database fetch_val error: {e}")
+            raise
+        finally:
+            connection.close()
 
 # Export database instance for backward compatibility
 database = DatabaseWrapper()
 
 
-async def init_db():
+def init_db():
     # connect and run SQL migrations (demo: run single SQL file)
     t0 = time.time()
     logger.info("d1.init_db: connecting to database at %s", DATABASE_URL)
@@ -163,7 +181,7 @@ async def init_db():
 
 
 
-async def create_message(content: str, video_id: str = None):
+def create_message(content: str, video_id: str = None):
     connection = get_connection()
     try:
         query = text("INSERT INTO messages (content, video_id) VALUES (:content, :video_id)")
@@ -176,7 +194,7 @@ async def create_message(content: str, video_id: str = None):
         connection.close()
 
 
-async def list_messages(limit: int = 50):
+def list_messages(limit: int = 50):
     connection = get_connection()
     try:
         query = text("SELECT id, content, created_at, video_id FROM messages ORDER BY id DESC LIMIT :limit")

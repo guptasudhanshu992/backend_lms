@@ -21,13 +21,13 @@ class PermissionService:
     async def get_role_by_name(self, role_name: str) -> Optional[dict]:
         """Get role by name."""
         query = roles.select().where(roles.c.name == role_name)
-        role = await database.fetch_one(query)
+        role = database.fetch_one(query)
         return dict(role) if role else None
     
     async def get_all_roles(self) -> List[dict]:
         """Get all roles."""
         query = roles.select()
-        result = await database.fetch_all(query)
+        result = database.fetch_all(query)
         return [dict(row) for row in result]
     
     async def create_role(
@@ -38,7 +38,7 @@ class PermissionService:
     ) -> dict:
         """Create a new role."""
         # Check if role exists
-        existing = await self.get_role_by_name(name)
+        existing = self.get_role_by_name(name)
         if existing:
             raise ValueError(f"Role '{name}' already exists")
         
@@ -52,11 +52,11 @@ class PermissionService:
             description=description,
             created_at=datetime.utcnow(),
         )
-        role_id = await database.execute(insert_query)
+        role_id = database.execute(insert_query)
         
         # Fetch created role
         query = roles.select().where(roles.c.id == role_id)
-        role = await database.fetch_one(query)
+        role = database.fetch_one(query)
         return dict(role)
     
     async def update_role(
@@ -81,30 +81,30 @@ class PermissionService:
         update_query = roles.update().where(
             roles.c.id == role_id
         ).values(**update_values)
-        await database.execute(update_query)
+        database.execute(update_query)
         
         # Fetch updated role
         query = roles.select().where(roles.c.id == role_id)
-        role = await database.fetch_one(query)
+        role = database.fetch_one(query)
         return dict(role)
     
     async def delete_role(self, role_id: int) -> bool:
         """Delete a role (only if no users have it)."""
         # Check if any users have this role
         query = users.select().where(users.c.role == role_id)
-        users_with_role = await database.fetch_one(query)
+        users_with_role = database.fetch_one(query)
         
         if users_with_role:
             raise ValueError("Cannot delete role - users are assigned to it")
         
         delete_query = roles.delete().where(roles.c.id == role_id)
-        await database.execute(delete_query)
+        database.execute(delete_query)
         return True
     
     async def get_all_groups(self) -> List[dict]:
         """Get all groups."""
         query = groups.select()
-        result = await database.fetch_all(query)
+        result = database.fetch_all(query)
         return [dict(row) for row in result]
     
     async def create_group(
@@ -123,11 +123,11 @@ class PermissionService:
             description=description,
             created_at=datetime.utcnow(),
         )
-        group_id = await database.execute(insert_query)
+        group_id = database.execute(insert_query)
         
         # Fetch created group
         query = groups.select().where(groups.c.id == group_id)
-        group = await database.fetch_one(query)
+        group = database.fetch_one(query)
         return dict(group)
     
     async def update_group(
@@ -152,11 +152,11 @@ class PermissionService:
         update_query = groups.update().where(
             groups.c.id == group_id
         ).values(**update_values)
-        await database.execute(update_query)
+        database.execute(update_query)
         
         # Fetch updated group
         query = groups.select().where(groups.c.id == group_id)
-        group = await database.fetch_one(query)
+        group = database.fetch_one(query)
         return dict(group)
     
     async def delete_group(self, group_id: int) -> bool:
@@ -165,11 +165,11 @@ class PermissionService:
         delete_memberships = user_groups.delete().where(
             user_groups.c.group_id == group_id
         )
-        await database.execute(delete_memberships)
+        database.execute(delete_memberships)
         
         # Delete group
         delete_query = groups.delete().where(groups.c.id == group_id)
-        await database.execute(delete_query)
+        database.execute(delete_query)
         return True
     
     async def add_user_to_group(self, user_id: int, group_id: int) -> bool:
@@ -179,7 +179,7 @@ class PermissionService:
             (user_groups.c.user_id == user_id) &
             (user_groups.c.group_id == group_id)
         )
-        existing = await database.fetch_one(query)
+        existing = database.fetch_one(query)
         
         if existing:
             return True  # Already member
@@ -189,7 +189,7 @@ class PermissionService:
             group_id=group_id,
             created_at=datetime.utcnow(),
         )
-        await database.execute(insert_query)
+        database.execute(insert_query)
         return True
     
     async def remove_user_from_group(self, user_id: int, group_id: int) -> bool:
@@ -198,7 +198,7 @@ class PermissionService:
             (user_groups.c.user_id == user_id) &
             (user_groups.c.group_id == group_id)
         )
-        await database.execute(delete_query)
+        database.execute(delete_query)
         return True
     
     async def get_user_groups(self, user_id: int) -> List[dict]:
@@ -208,7 +208,7 @@ class PermissionService:
         JOIN user_groups ug ON g.id = ug.group_id
         WHERE ug.user_id = :user_id
         """
-        result = await database.fetch_all(query=query, values={"user_id": user_id})
+        result = database.fetch_all(query=query, values={"user_id": user_id})
         return [dict(row) for row in result]
     
     async def grant_user_permission(
@@ -222,7 +222,7 @@ class PermissionService:
             (user_permissions.c.user_id == user_id) &
             (user_permissions.c.permission == permission)
         )
-        existing = await database.fetch_one(query)
+        existing = database.fetch_one(query)
         
         if existing:
             return True  # Already granted
@@ -232,7 +232,7 @@ class PermissionService:
             permission=permission,
             created_at=datetime.utcnow(),
         )
-        await database.execute(insert_query)
+        database.execute(insert_query)
         return True
     
     async def revoke_user_permission(
@@ -245,7 +245,7 @@ class PermissionService:
             (user_permissions.c.user_id == user_id) &
             (user_permissions.c.permission == permission)
         )
-        await database.execute(delete_query)
+        database.execute(delete_query)
         return True
     
     async def get_user_permissions(self, user_id: int) -> Set[str]:
@@ -261,7 +261,7 @@ class PermissionService:
         JOIN users u ON u.role = r.name
         WHERE u.id = :user_id
         """
-        role_result = await database.fetch_one(query=query, values={"user_id": user_id})
+        role_result = database.fetch_one(query=query, values={"user_id": user_id})
         
         if role_result and role_result["permissions"]:
             import json
@@ -272,7 +272,7 @@ class PermissionService:
                 logger.error(f"Failed to parse role permissions for user {user_id}")
         
         # Get group permissions
-        user_group_list = await self.get_user_groups(user_id)
+        user_group_list = self.get_user_groups(user_id)
         for group in user_group_list:
             if group["permissions"]:
                 import json
@@ -286,7 +286,7 @@ class PermissionService:
         query = user_permissions.select().where(
             user_permissions.c.user_id == user_id
         )
-        user_perms = await database.fetch_all(query)
+        user_perms = database.fetch_all(query)
         all_permissions.update([perm["permission"] for perm in user_perms])
         
         return all_permissions
@@ -297,7 +297,7 @@ class PermissionService:
         required_permission: str,
     ) -> bool:
         """Check if user has a specific permission."""
-        user_perms = await self.get_user_permissions(user_id)
+        user_perms = self.get_user_permissions(user_id)
         return required_permission in user_perms
 
 
