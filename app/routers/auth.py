@@ -64,8 +64,23 @@ async def login(payload: LoginIn, request: Request, response: Response):
     }
 
 
+class RefreshTokenIn(BaseModel):
+    refresh_token: Optional[str] = None
+
+
 @router.post('/refresh')
-async def refresh(response: Response, refresh_token: str | None = Cookie(None)):
+async def refresh(
+    response: Response, 
+    payload: Optional[RefreshTokenIn] = None,
+    refresh_token_cookie: str | None = Cookie(None, alias="refresh_token")
+):
+    # Try to get refresh token from body first, then from cookie
+    refresh_token = None
+    if payload and payload.refresh_token:
+        refresh_token = payload.refresh_token
+    elif refresh_token_cookie:
+        refresh_token = refresh_token_cookie
+    
     if not refresh_token:
         raise HTTPException(status_code=401, detail="Missing refresh token")
     data = await auth_service.refresh_tokens(refresh_token)
