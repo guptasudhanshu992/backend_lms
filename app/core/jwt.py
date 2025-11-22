@@ -65,21 +65,25 @@ def create_refresh_token(subject: str, expires_delta: int | None = None, extra_c
     return _encode(payload)
 
 
-def create_verification_token(subject: str):
+def create_verification_token(subject: str = None, user_id: int = None):
     """Create token for email verification"""
+    # Support both 'subject' and 'user_id' parameters for backward compatibility
+    sub = str(subject) if subject is not None else str(user_id)
     exp = datetime.utcnow() + timedelta(hours=24)
     exp_timestamp = int((exp - datetime(1970, 1, 1)).total_seconds())
-    payload = {"sub": str(subject), "exp": exp_timestamp, "type": "email_verify"}
+    payload = {"sub": sub, "exp": exp_timestamp, "type": "email_verify"}
     if not _encode:
         raise RuntimeError("No JWT library available.")
     return _encode(payload)
 
 
-def create_reset_token(subject: str):
+def create_reset_token(subject: str = None, user_id: int = None):
     """Create token for password reset"""
+    # Support both 'subject' and 'user_id' parameters for backward compatibility
+    sub = str(subject) if subject is not None else str(user_id)
     exp = datetime.utcnow() + timedelta(hours=1)
     exp_timestamp = int((exp - datetime(1970, 1, 1)).total_seconds())
-    payload = {"sub": str(subject), "exp": exp_timestamp, "type": "password_reset"}
+    payload = {"sub": sub, "exp": exp_timestamp, "type": "password_reset"}
     if not _encode:
         raise RuntimeError("No JWT library available.")
     return _encode(payload)

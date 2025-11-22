@@ -61,6 +61,19 @@ class GroupMembership(BaseModel):
     group_id: int
 
 
+# ===== Auth Verification =====
+
+@router.get('/me', dependencies=[Depends(require_admin)])
+async def get_current_admin(current_user: dict = Depends(get_current_user)):
+    """Get current authenticated admin user info."""
+    return {
+        "id": current_user.get("user_id") or current_user.get("id"),
+        "email": current_user.get("email"),
+        "role": current_user.get("role"),
+        "is_active": current_user.get("is_active", True),
+    }
+
+
 # ===== Dashboard Stats =====
 
 @router.get('/stats', dependencies=[Depends(require_admin)])
