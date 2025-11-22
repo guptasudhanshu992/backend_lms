@@ -9,3 +9,11 @@ sqlalchemy
 httpx
 gunicorn
 aiofiles
+passlib[bcrypt]
+python-jose[cryptography]
+aiosmtplib
+email-validator
+Authlib
+alembic
+pydantic[email]
+argon2-cffi

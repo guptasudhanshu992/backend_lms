@@ -19,17 +19,43 @@ async def init_db():
     await database.connect()
     logger.info("d1.init_db: connected (%.3f sec)", time.time() - t0)
     try:
-        migrations_path = os.path.join(os.path.dirname(__file__), "..", "migrations", "001_create_messages.sql")
-        migrations_path = os.path.abspath(migrations_path)
-        logger.info("d1.init_db: applying migration %s", migrations_path)
-        with open(migrations_path, "r", encoding="utf-8") as f:
-            migration_sql = f.read()
-        t1 = time.time()
-        # execute raw SQL
-        await database.execute(query=migration_sql)
-        logger.info("d1.init_db: migration applied (%.3f sec)", time.time() - t1)
+        # apply existing migrations
+        migrations_dir = os.path.join(os.path.dirname(__file__), "..", "migrations")
+        migrations_dir = os.path.abspath(migrations_dir)
+        for fname in sorted(os.listdir(migrations_dir)):
+            if fname.endswith('.sql'):
+                path = os.path.join(migrations_dir, fname)
+                logger.info("d1.init_db: applying migration %s", path)
+                with open(path, "r", encoding="utf-8") as f:
+                    migration_sql = f.read()
+                
+                # Split SQL statements (SQLite can only execute one at a time)
+                # Remove comments and split by semicolon
+                lines = []
+                for line in migration_sql.split('\n'):
+                    # Remove comments
+                    line = line.split('--')[0].strip()
+                    if line:
+                        lines.append(line)
+                
+                full_sql = ' '.join(lines)
+                statements = [
+                    stmt.strip() 
+                    for stmt in full_sql.split(';') 
+                    if stmt.strip()
+                ]
+                
+                t1 = time.time()
+                for i, stmt in enumerate(statements):
+                    try:
+                        logger.debug("Executing statement %d: %s...", i+1, stmt[:100])
+                        await database.execute(query=stmt)
+                    except Exception as e:
+                        # Table might already exist, log but continue
+                        logger.warning("Statement %d failed (may be expected): %s", i+1, str(e))
+                
+                logger.info("d1.init_db: applied %s (%d statements) in %.3f sec", fname, len(statements), time.time() - t1)
     except Exception as e:
-        # log and continue; often means table already exists
         logger.exception("d1.init_db: migration failed or skipped: %s", e)
 
 
