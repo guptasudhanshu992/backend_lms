@@ -3,7 +3,6 @@ Database initialization script for LMS
 Creates all tables in one go - works with both SQLite and PostgreSQL
 Run this script to initialize a fresh database
 """
-import asyncio
 import os
 import sys
 from pathlib import Path
@@ -12,9 +11,13 @@ from pathlib import Path
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
+# Load environment variables BEFORE importing settings
+from dotenv import load_dotenv
+load_dotenv()
+
 from app.config.settings import settings
-import databases
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
+from sqlalchemy.pool import StaticPool
 
 # SQL statements to create all tables
 CREATE_TABLES_SQL = """
@@ -366,38 +369,77 @@ ON CONFLICT (name) DO NOTHING;
 """
 
 
-async def init_database():
+def init_database():
     """Initialize database with all tables"""
     print(f"🔗 Connecting to database: {settings.DATABASE_URL}")
     
     # Determine if we're using PostgreSQL
     is_postgres = settings.DATABASE_URL.startswith('postgresql')
     
-    database = databases.Database(settings.DATABASE_URL)
+    # Create engine with appropriate configuration
+    if is_postgres:
+        engine = create_engine(settings.DATABASE_URL)
+    else:
+        # SQLite needs special handling for file paths
+        engine = create_engine(
+            settings.DATABASE_URL,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool
+        )
     
     try:
-        await database.connect()
+        connection = engine.connect()
         print("✅ Connected to database")
         
         # Choose appropriate SQL based on database type
         sql = CREATE_TABLES_POSTGRESQL if is_postgres else CREATE_TABLES_SQL
+        print(f"  📝 Using {'PostgreSQL' if is_postgres else 'SQLite'} SQL syntax")
         
-        # Split and execute statements
-        statements = [stmt.strip() for stmt in sql.split(';') if stmt.strip()]
+        # Get existing tables before execution
+        print("  🔍 Checking existing tables...")
+        if is_postgres:
+            pre_verify_query = """
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """
+        else:
+            pre_verify_query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%%'"
         
-        print(f"📋 Executing {len(statements)} SQL statements...")
+        try:
+            result = connection.execute(text(pre_verify_query))
+            existing_before = set(row[0] for row in result)
+            print(f"  📊 Found {len(existing_before)} existing tables: {', '.join(sorted(existing_before)) if existing_before else 'none'}")
+        except Exception:
+            existing_before = set()
+        
+        # Split and execute statements - filter out comments and empty lines
+        raw_statements = sql.split(';')
+        statements = []
+        for stmt in raw_statements:
+            # Remove comments and whitespace
+            lines = [line for line in stmt.split('\n') if line.strip() and not line.strip().startswith('--')]
+            clean_stmt = '\n'.join(lines).strip()
+            if clean_stmt and len(clean_stmt) > 20:  # Only keep substantial statements
+                statements.append(clean_stmt)
+        
+        print(f"📋 Found {len(statements)} SQL statements to execute...")
         
         created_tables = []
         failed_statements = []
         
         for i, stmt in enumerate(statements, 1):
-            # Skip comments
-            if stmt.startswith('--'):
-                continue
-                
             try:
-                print(f"  🔄 Executing statement {i}...")
-                await database.execute(text(stmt))
+                print(f"  🔄 Executing statement {i}/{len(statements)}...")
+                
+                # Show a preview of the statement
+                stmt_preview = stmt[:100].replace('\n', ' ').strip()
+                if len(stmt) > 100:
+                    stmt_preview += "..."
+                print(f"     Query: {stmt_preview}")
+                
+                connection.execute(text(stmt))
+                connection.commit()
                 
                 # Show progress for important operations
                 if 'CREATE TABLE' in stmt:
@@ -409,8 +451,21 @@ async def init_database():
                 else:
                     print(f"  ✅ Statement {i} executed successfully")
             except Exception as e:
-                print(f"  ❌ Statement {i} failed: {e}")
-                failed_statements.append((i, str(e)))
+                error_msg = str(e)
+                print(f"  ❌ Statement {i} failed!")
+                print(f"     Error type: {type(e).__name__}")
+                print(f"     Error message: {error_msg}")
+                print(f"     Failed query preview: {stmt[:300]}...")
+                # Print full traceback for debugging
+                import traceback
+                print(f"     Full error details:")
+                traceback.print_exc()
+                failed_statements.append({
+                    'statement_num': i,
+                    'error_type': type(e).__name__,
+                    'error_message': error_msg,
+                    'query_preview': stmt[:200]
+                })
                 continue
         
         # Verify tables exist
@@ -423,39 +478,64 @@ async def init_database():
                 ORDER BY table_name
             """
         else:
-            verify_query = """
-                SELECT name 
-                FROM sqlite_master 
-                WHERE type='table' 
-                ORDER BY name
-            """
+            verify_query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%%' ORDER BY name"
+        
+        existing_tables = []
+        new_tables = []
+        existing_tables_count = 0
         
         try:
-            result = await database.fetch_all(text(verify_query))
+            result = connection.execute(text(verify_query))
             existing_tables = [row[0] for row in result]
+            
+            # Calculate what's new vs what existed
+            existing_after = set(existing_tables)
+            new_tables = list(existing_after - existing_before)
+            existed_before = list(existing_after & existing_before)
+            
             print(f"✅ Found {len(existing_tables)} tables in database:")
             for table in existing_tables:
-                print(f"   • {table}")
+                status = "🆕 NEW" if table in new_tables else "✓"
+                print(f"   {status} {table}")
         except Exception as e:
             print(f"⚠️  Could not verify tables: {e}")
+            new_tables = []
+            existed_before = []
         
         print("\n" + "=" * 60)
         print(f"✅ Database initialization complete!")
         print(f"📊 Database type: {'PostgreSQL' if is_postgres else 'SQLite'}")
-        print(f"✅ Tables created/verified: {len(created_tables)}")
+        print(f"📋 Total tables: {len(existing_tables)}")
+        print(f"🆕 Newly created: {len(new_tables)}")
+        print(f"✓  Already existed: {len(existed_before)}")
         
         if failed_statements:
-            print(f"⚠️  Failed statements: {len(failed_statements)}")
-            for stmt_num, error in failed_statements:
-                print(f"   Statement {stmt_num}: {error}")
+            print(f"\n⚠️  WARNING: {len(failed_statements)} statement(s) failed:")
+            print("=" * 60)
+            for fail in failed_statements:
+                print(f"\n❌ Statement #{fail['statement_num']}:")
+                print(f"   Error Type: {fail['error_type']}")
+                print(f"   Error: {fail['error_message']}")
+                print(f"   Query: {fail['query_preview']}")
+                if len(fail['query_preview']) == 200:
+                    print(f"   (truncated...)")
+            print("=" * 60)
+        else:
+            print("✅ All statements executed successfully!")
         
     except Exception as e:
-        print(f"\n❌ Error initializing database: {e}")
+        print(f"\n❌ CRITICAL ERROR during database initialization!")
+        print(f"Error Type: {type(e).__name__}")
+        print(f"Error Message: {str(e)}")
+        print("\n📋 Full Traceback:")
+        print("=" * 60)
         import traceback
         traceback.print_exc()
+        print("=" * 60)
         raise
     finally:
-        await database.disconnect()
+        connection.close()
+        engine.dispose()
         print("🔌 Disconnected from database")
 
 
@@ -465,7 +545,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print()
     
-    asyncio.run(init_database())
+    init_database()
     
     print()
     print("=" * 60)
