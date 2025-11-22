@@ -17,3 +17,5 @@ Authlib
 alembic
 pydantic[email]
 argon2-cffi
+asyncpg
+psycopg2-binary
