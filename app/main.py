@@ -37,9 +37,21 @@ logger = logging.getLogger("lms.backend")
 
 app = FastAPI(title="LMS Backend - FastAPI")
 
+# Configure CORS - allow frontend origin or all origins in development
+allowed_origins = []
+if settings.FRONTEND_ORIGIN:
+    # Support multiple origins separated by comma
+    allowed_origins = [origin.strip() for origin in settings.FRONTEND_ORIGIN.split(',')]
+else:
+    # If not set, allow all (not recommended for production)
+    allowed_origins = ["*"]
+
+print(">>> FRONTEND_ORIGIN =", repr(settings.FRONTEND_ORIGIN))
+print(">>> Allowed CORS origins:", allowed_origins)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_ORIGIN] if settings.FRONTEND_ORIGIN else ["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

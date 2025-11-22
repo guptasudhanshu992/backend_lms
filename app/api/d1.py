@@ -12,7 +12,7 @@ class MessageIn(BaseModel):
 
 @router.on_event("startup")
 async def _connect_db():
-    if not database.is_connected:
+    if not database._connected:
         await database.connect()
 
 

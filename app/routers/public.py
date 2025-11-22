@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.services.d1_service import database
 from app.routers.content import blogs, courses
+from sqlalchemy import text
 import logging
 
 router = APIRouter()
@@ -45,8 +46,8 @@ async def list_public_blogs():
 @router.get('/blogs/{blog_id}')
 async def get_public_blog(blog_id: int):
     """Get a specific published blog post (public endpoint)."""
-    query = blogs.select().where(blogs.c.id == blog_id, blogs.c.published == True)
-    blog = await database.fetch_one(query)
+    query = text("SELECT * FROM blogs WHERE id = :blog_id AND published = 1")
+    blog = await database.fetch_one(query, {"blog_id": blog_id})
     if not blog:
         raise HTTPException(status_code=404, detail="Blog post not found")
     return {
@@ -58,7 +59,7 @@ async def get_public_blog(blog_id: int):
         "category": blog["category"],
         "image_url": blog["image_url"],
         "published": blog["published"],
-        "created_at": blog["created_at"].isoformat() if blog["created_at"] else None,
+        "created_at": blog["created_at"].isoformat() if hasattr(blog["created_at"], 'isoformat') else str(blog["created_at"]),
     }
 
 
@@ -67,33 +68,36 @@ async def get_public_blog(blog_id: int):
 @router.get('/courses')
 async def list_public_courses():
     """List all published courses (public endpoint)."""
-    query = courses.select().where(courses.c.published == True).order_by(courses.c.created_at.desc())
-    result = await database.fetch_all(query)
-    return {
-        "courses": [
-            {
-                "id": c["id"],
-                "title": c["title"],
-                "description": c["description"],
-                "instructor": c["instructor"],
-                "duration": c["duration"],
-                "level": c["level"],
-                "price": c["price"],
-                "category": c["category"],
-                "image_url": c["image_url"],
-                "published": c["published"],
-                "created_at": c["created_at"].isoformat() if c["created_at"] else None,
-            }
-            for c in result
-        ]
-    }
+    try:
+        query = text("SELECT * FROM courses WHERE published = 1 ORDER BY created_at DESC")
+        result = await database.fetch_all(query)
+        return {
+            "courses": [
+                {
+                    "id": c["id"],
+                    "title": c["title"],
+                    "description": c["description"],
+                    "instructor": c["instructor"],
+                    "duration": c["duration"],
+                    "level": c["level"],
+                    "category": c["category"],
+                    "image_url": c.get("image_url"),
+                    "published": c["published"],
+                    "created_at": c["created_at"].isoformat() if hasattr(c.get("created_at"), 'isoformat') else str(c.get("created_at")) if c.get("created_at") else None,
+                }
+                for c in result
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error fetching courses: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching courses: {str(e)}")
 
 
 @router.get('/courses/{course_id}')
 async def get_public_course(course_id: int):
     """Get a specific published course (public endpoint)."""
-    query = courses.select().where(courses.c.id == course_id, courses.c.published == True)
-    course = await database.fetch_one(query)
+    query = text("SELECT * FROM courses WHERE id = :course_id AND published = 1")
+    course = await database.fetch_one(query, {"course_id": course_id})
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     return {
@@ -103,9 +107,8 @@ async def get_public_course(course_id: int):
         "instructor": course["instructor"],
         "duration": course["duration"],
         "level": course["level"],
-        "price": course["price"],
         "category": course["category"],
-        "image_url": course["image_url"],
+        "image_url": course.get("image_url"),
         "published": course["published"],
-        "created_at": course["created_at"].isoformat() if course["created_at"] else None,
+        "created_at": course["created_at"].isoformat() if hasattr(course.get("created_at"), 'isoformat') else str(course.get("created_at")) if course.get("created_at") else None,
     }
