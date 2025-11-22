@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 # ===== Public Blog Endpoints =====
 
 @router.get('/blogs')
-async def list_public_blogs():
-    """List all published blog posts (public endpoint)."""
+async def list_public_blogs(limit: int = 20, offset: int = 0):
+    """List published blog posts (public endpoint) with pagination."""
     try:
         # Use raw SQL to safely handle missing columns
         query_text = """
@@ -19,9 +19,16 @@ async def list_public_blogs():
             FROM blogs 
             WHERE published = TRUE 
             ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
         """
-        result = await database.fetch_all(query_text)
-        logger.info(f"Fetched {len(result)} published blogs")
+        result = await database.fetch_all(query_text, {"limit": limit, "offset": offset})
+        
+        # Get total count
+        count_query = "SELECT COUNT(*) as total FROM blogs WHERE published = TRUE"
+        total_result = await database.fetch_one(count_query)
+        total = total_result["total"] if total_result else 0
+        
+        logger.info(f"Fetched {len(result)} of {total} published blogs")
         return {
             "blogs": [
                 {
@@ -36,7 +43,10 @@ async def list_public_blogs():
                     "created_at": b["created_at"] if isinstance(b["created_at"], str) else (b["created_at"].isoformat() if b.get("created_at") else None),
                 }
                 for b in result
-            ]
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset
         }
     except Exception as e:
         logger.error(f"Error fetching blogs: {str(e)}")
@@ -66,11 +76,18 @@ async def get_public_blog(blog_id: int):
 # ===== Public Courses Endpoints =====
 
 @router.get('/courses')
-async def list_public_courses():
-    """List all published courses (public endpoint)."""
+async def list_public_courses(limit: int = 20, offset: int = 0):
+    """List published courses (public endpoint) with pagination."""
     try:
-        query = text("SELECT * FROM courses WHERE published = TRUE ORDER BY created_at DESC")
-        result = await database.fetch_all(query)
+        query = text("SELECT * FROM courses WHERE published = TRUE ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+        result = await database.fetch_all(query, {"limit": limit, "offset": offset})
+        
+        # Get total count
+        count_query = text("SELECT COUNT(*) as total FROM courses WHERE published = TRUE")
+        total_result = await database.fetch_one(count_query)
+        total = total_result["total"] if total_result else 0
+        
+        logger.info(f"Fetched {len(result)} of {total} published courses")
         return {
             "courses": [
                 {
@@ -86,7 +103,10 @@ async def list_public_courses():
                     "created_at": c["created_at"].isoformat() if hasattr(c.get("created_at"), 'isoformat') else str(c.get("created_at")) if c.get("created_at") else None,
                 }
                 for c in result
-            ]
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset
         }
     except Exception as e:
         logger.error(f"Error fetching courses: {str(e)}")
