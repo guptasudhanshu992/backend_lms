@@ -17,7 +17,7 @@ async def list_public_blogs():
         query_text = """
             SELECT id, title, excerpt, content, author, category, image_url, published, created_at
             FROM blogs 
-            WHERE published = 1 
+            WHERE published = TRUE 
             ORDER BY created_at DESC
         """
         result = await database.fetch_all(query_text)
@@ -46,7 +46,7 @@ async def list_public_blogs():
 @router.get('/blogs/{blog_id}')
 async def get_public_blog(blog_id: int):
     """Get a specific published blog post (public endpoint)."""
-    query = text("SELECT * FROM blogs WHERE id = :blog_id AND published = 1")
+    query = text("SELECT * FROM blogs WHERE id = :blog_id AND published = TRUE")
     blog = await database.fetch_one(query, {"blog_id": blog_id})
     if not blog:
         raise HTTPException(status_code=404, detail="Blog post not found")
@@ -69,7 +69,7 @@ async def get_public_blog(blog_id: int):
 async def list_public_courses():
     """List all published courses (public endpoint)."""
     try:
-        query = text("SELECT * FROM courses WHERE published = 1 ORDER BY created_at DESC")
+        query = text("SELECT * FROM courses WHERE published = TRUE ORDER BY created_at DESC")
         result = await database.fetch_all(query)
         return {
             "courses": [
@@ -96,7 +96,7 @@ async def list_public_courses():
 @router.get('/courses/{course_id}')
 async def get_public_course(course_id: int):
     """Get a specific published course (public endpoint)."""
-    query = text("SELECT * FROM courses WHERE id = :course_id AND published = 1")
+    query = text("SELECT * FROM courses WHERE id = :course_id AND published = TRUE")
     course = await database.fetch_one(query, {"course_id": course_id})
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
