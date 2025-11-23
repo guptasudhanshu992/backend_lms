@@ -79,7 +79,7 @@ class OAuthService:
         )
         return authorization_url
     
-    async def exchange_google_code(self, code: str) -> Dict[str, Any]:
+    def exchange_google_code(self, code: str) -> Dict[str, Any]:
         """Exchange Google authorization code for access token and user info."""
         if not AUTHLIB_AVAILABLE:
             raise RuntimeError("Authlib not available")
@@ -145,7 +145,7 @@ class OAuthService:
             "picture": user_info.get("picture", ""),
         }
     
-    async def find_or_create_oauth_user(
+    def find_or_create_oauth_user(
         self, 
         oauth_data: Dict[str, Any],
         ip_address: Optional[str] = None,

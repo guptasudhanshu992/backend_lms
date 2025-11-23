@@ -6,6 +6,10 @@ from app import models
 from app.services.d1_service import database
 import uuid
 import datetime
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def register_user(email: str, password: str, consent: bool = False):
@@ -14,15 +18,68 @@ def register_user(email: str, password: str, consent: bool = False):
     exists = database.fetch_one(q)
     if exists:
         raise ValueError("User already exists")
+    
     hashed = hash_password(password)
-    res = database.execute(models.users.insert().values(email=email, hashed_password=hashed, is_active=True, is_verified=False, consent=consent, role='student'))
-    user = database.fetch_one(models.users.select().where(models.users.c.id == res))
-    # send verification email
-    token = create_refresh_token(str(user.id))
-    verify_link = f"{settings.FRONTEND_ORIGIN}/verify-email?token={token}"
-    email_service.send_email(email, "Verify your account", f"Click to verify: {verify_link}")
-    audit_service.log(user_id=user.id, action="user.register", meta={})
-    return user
+    
+    try:
+        # Insert the new user
+        insert_query = models.users.insert().values(
+            email=email, 
+            hashed_password=hashed, 
+            is_active=True, 
+            is_verified=False, 
+            consent=consent, 
+            role='student'
+        )
+        user_id = database.execute(insert_query)
+        
+        # Fetch the newly created user
+        if user_id:
+            user = database.fetch_one(models.users.select().where(models.users.c.id == user_id))
+        else:
+            # Try fetching by email as fallback
+            user = database.fetch_one(models.users.select().where(models.users.c.email == email))
+        
+        if not user:
+            raise ValueError("Failed to retrieve created user")
+        
+        # send verification email asynchronously
+        token = create_refresh_token(str(user["id"]))
+        verify_link = f"{settings.FRONTEND_ORIGIN}/verify-email?token={token}"
+        
+        # Send email in background without blocking registration
+        async def send_verification_email_async():
+            try:
+                await asyncio.to_thread(
+                    email_service.send_email,
+                    email,
+                    "Verify your account",
+                    f"Click to verify: {verify_link}"
+                )
+                logger.info(f"Verification email sent to {email}")
+            except Exception as e:
+                logger.error(f"Failed to send verification email: {e}")
+        
+        # Schedule the async task without awaiting
+        try:
+            asyncio.create_task(send_verification_email_async())
+        except RuntimeError:
+            # If no event loop is running, log and continue
+            logger.warning("Could not schedule email task - no event loop running")
+        
+        # Log audit event
+        try:
+            audit_service.log(user_id=user["id"], action="user.register", meta={})
+        except Exception as e:
+            print(f"Failed to log audit: {e}")
+        
+        return user
+        
+    except ValueError:
+        raise
+    except Exception as e:
+        print(f"Registration error: {e}")
+        raise ValueError(f"Failed to create user: {str(e)}")
 
 
 def authenticate_user(email: str, password: str = None, user_agent: str = None, ip: str = None, oauth_user: dict = None):

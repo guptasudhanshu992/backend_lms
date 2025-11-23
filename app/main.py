@@ -15,6 +15,7 @@ from app.services import d1_service
 from app.services.admin_bootstrap import bootstrap_admin
 from app.routers import auth as auth_router
 from app.routers import gdpr as gdpr_router
+from app.routers import profile as profile_router
 try:
     from app.routers import admin as admin_router
 except Exception:
@@ -24,13 +25,35 @@ try:
 except Exception:
     admin_auth_router = None
 try:
+    print(">>> Attempting to import content router...")
     from app.routers import content as content_router
-except Exception:
+    print(f">>> content_router loaded successfully!")
+    print(f">>> Total routes in content_router: {len(content_router.router.routes)}")
+    public_routes = [r.path for r in content_router.router.routes if 'public' in r.path]
+    print(f">>> Public routes: {public_routes}")
+except Exception as e:
+    print(f">>> ERROR loading content_router: {e}")
+    import traceback
+    traceback.print_exc()
     content_router = None
+
 try:
-    from app.routers import public as public_router
-except Exception:
-    public_router = None
+    from app.routers import payment as payment_router
+except Exception as e:
+    print(f">>> ERROR loading payment_router: {e}")
+    payment_router = None
+
+try:
+    from app.routers import analytics as analytics_router
+except Exception as e:
+    print(f">>> ERROR loading analytics_router: {e}")
+    analytics_router = None
+
+try:
+    from app.routers import quiz as quiz_router
+except Exception as e:
+    print(f">>> ERROR loading quiz_router: {e}")
+    quiz_router = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("lms.backend")
@@ -57,6 +80,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add analytics middleware to track all API requests
+# DISABLED: Analytics middleware consumes significant resources
+# try:
+#     from app.middleware.analytics_middleware import APIAnalyticsMiddleware
+#     app.add_middleware(APIAnalyticsMiddleware)
+#     print(">>> API Analytics middleware enabled")
+# except Exception as e:
+#     print(f">>> WARNING: Could not enable analytics middleware: {e}")
+
 print(">>> FRONTEND_ORIGIN =", repr(settings.FRONTEND_ORIGIN))
 
 app.include_router(hello.router, prefix="/api")
@@ -67,6 +99,9 @@ app.include_router(stream.router, prefix="/api")
 # Auth router
 app.include_router(auth_router.router, prefix="/api/auth")
 
+# Profile router
+app.include_router(profile_router.router, prefix="/api/profile")
+
 # Admin Auth router (env-based authentication)
 if admin_auth_router is not None:
     app.include_router(admin_auth_router.router, prefix="/api/admin/auth")
@@ -74,29 +109,46 @@ if admin_auth_router is not None:
 # GDPR router
 app.include_router(gdpr_router.router, prefix="/api/gdpr")
 
-# Public router (blogs, courses)
-if public_router is not None:
-    app.include_router(public_router.router, prefix="/api/public")
-
 # Admin router (optional)
 if admin_router is not None:
     app.include_router(admin_router.router, prefix="/api/admin")
 
-# Content router (courses and blogs)
+# Content router (courses and blogs - includes both /admin and /public routes)
 if content_router is not None:
-    app.include_router(content_router.router, prefix="/api/admin")
+    # Register with /api prefix - routes in content.py have /admin/... and /public/... prefixes
+    app.include_router(content_router.router, prefix="/api")
+    print(">>> Content router registered with /api/admin/* and /api/public/* routes")
+
+# Payment router
+if payment_router is not None:
+    app.include_router(payment_router.router)
+    print(">>> Payment router registered")
+
+# Quiz router
+if quiz_router is not None:
+    app.include_router(quiz_router.router)
+    print(">>> Quiz router registered")
+
+# Analytics router
+# DISABLED: Analytics feature consumes significant resources
+# if analytics_router is not None:
+#     app.include_router(analytics_router.router)
+#     print(">>> Analytics router registered")
 
 @app.on_event("startup")
 async def startup_event():
     # run D1 migrations or initial checks
     logger.info("startup_event: starting init_db")
     t0 = time.time()
+
+    '''
     try:
         d1_service.init_db()
     except Exception as e:
         logger.exception("startup_event: init_db failed: %s", e)
     finally:
         logger.info("startup_event: init_db completed in %.3f sec", time.time() - t0)
+    '''
     
     # Bootstrap admin user from .env
     logger.info("startup_event: bootstrapping admin user")

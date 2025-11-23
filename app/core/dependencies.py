@@ -68,7 +68,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             detail="User not found"
         )
     
-    if not user.is_active:
+    if not user.get("is_active"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive"
@@ -79,7 +79,9 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 
 def get_current_verified_user(current_user = Depends(get_current_user)):
     """Require verified email"""
-    if not current_user.is_verified:
+    # Handle SimpleNamespace for env-based admin
+    is_verified = current_user.get("is_verified") if isinstance(current_user, dict) else current_user.is_verified
+    if not is_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Email not verified"
@@ -90,7 +92,9 @@ def get_current_verified_user(current_user = Depends(get_current_user)):
 def require_role(role: str):
     """Factory function to create role-based dependencies"""
     def check_role(current_user = Depends(get_current_user)):
-        if current_user.role != role and current_user.role != "admin":
+        # Handle both dict and SimpleNamespace
+        user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
+        if user_role != role and user_role != "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role '{role}' required"
@@ -101,7 +105,9 @@ def require_role(role: str):
 
 def require_admin(current_user = Depends(get_current_user)):
     """Require admin role"""
-    if current_user.role != "admin":
+    # Handle both dict and SimpleNamespace
+    user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
+    if user_role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Administrator access required"
@@ -111,13 +117,17 @@ def require_admin(current_user = Depends(get_current_user)):
 
 def require_permission(permission: str, current_user = Depends(get_current_user)):
     """Check if user has specific permission through role, group, or user-level"""
+    # Handle both dict and SimpleNamespace
+    user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
+    user_id = current_user.get("id") if isinstance(current_user, dict) else current_user.id
+    
     # Admin has all permissions
-    if current_user.role == "admin":
+    if user_role == "admin":
         return current_user
     
     # Check role permissions
     role = database.fetch_one(
-        models.roles.select().where(models.roles.c.name == current_user.role)
+        models.roles.select().where(models.roles.c.name == user_role)
     )
     if role:
         role_perms = json.loads(role.permissions) if isinstance(role.permissions, str) else role.permissions
@@ -127,7 +137,7 @@ def require_permission(permission: str, current_user = Depends(get_current_user)
     # Check user-level permissions
     user_perm = database.fetch_one(
         models.user_permissions.select().where(
-            models.user_permissions.c.user_id == current_user.id,
+            models.user_permissions.c.user_id == user_id,
             models.user_permissions.c.permission == permission
         )
     )
@@ -136,7 +146,7 @@ def require_permission(permission: str, current_user = Depends(get_current_user)
     
     # Check group permissions
     user_groups = database.fetch_all(
-        models.user_groups.select().where(models.user_groups.c.user_id == current_user.id)
+        models.user_groups.select().where(models.user_groups.c.user_id == user_id)
     )
     for ug in user_groups:
         group = database.fetch_one(

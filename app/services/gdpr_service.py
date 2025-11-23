@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class GDPRService:
     """Service for GDPR compliance features."""
     
-    async def export_user_data(self, user_id: int) -> Dict[str, Any]:
+    def export_user_data(self, user_id: int) -> Dict[str, Any]:
         """
         Export all user data in machine-readable format (GDPR Article 20).
         Returns comprehensive JSON with user info, sessions, audit logs.
@@ -95,7 +95,7 @@ class GDPRService:
         logger.info(f"GDPR data export generated for user {user_id}")
         return export
     
-    async def delete_user_account(
+    def delete_user_account(
         self,
         user_id: int,
         hard_delete: bool = False,
@@ -199,7 +199,7 @@ class GDPRService:
                 "note": "Account deactivated and personal data anonymized",
             }
     
-    async def get_consent_status(self, user_id: int) -> Dict[str, Any]:
+    def get_consent_status(self, user_id: int) -> Dict[str, Any]:
         """Get user's consent status."""
         user_query = users.select().where(users.c.id == user_id)
         user = database.fetch_one(user_query)
@@ -213,7 +213,7 @@ class GDPRService:
             "created_at": user["created_at"].isoformat() if user["created_at"] else None,
         }
     
-    async def update_consent(
+    def update_consent(
         self,
         user_id: int,
         consent: bool,

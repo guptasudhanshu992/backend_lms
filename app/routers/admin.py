@@ -85,8 +85,9 @@ def get_admin_stats():
     )
     
     # Count active sessions (not revoked and not expired)
+    # Use FALSE for PostgreSQL boolean comparison and NOW() instead of datetime('now')
     active_sessions = database.fetch_val(
-        query="SELECT COUNT(*) FROM sessions WHERE revoked = 0 AND expires_at > datetime('now')"
+        query="SELECT COUNT(*) FROM sessions WHERE revoked = FALSE AND expires_at > NOW()"
     )
     
     # Count audit logs
@@ -392,14 +393,14 @@ def list_sessions(
             {
                 "id": s["id"],
                 "user_id": s["user_id"],
-                "ip_address": s["ip_address"],
+                "ip_address": s.get("ip") or s.get("ip_address"),  # Handle both column names
                 "user_agent": s["user_agent"],
-                "device_type": s["device_type"],
-                "browser": s["browser"],
-                "os": s["os"],
-                "is_active": s["is_active"],
-                "created_at": s["created_at"].isoformat() if s["created_at"] else None,
-                "last_activity": s["last_activity"].isoformat() if s["last_activity"] else None,
+                "device_type": s.get("device_type"),
+                "browser": s.get("browser"),
+                "os": s.get("os"),
+                "is_active": s.get("is_active", True),
+                "created_at": s["created_at"].isoformat() if s.get("created_at") else None,
+                "last_activity": s.get("last_active_at").isoformat() if s.get("last_active_at") else None,
             }
             for s in result
         ]
@@ -447,7 +448,7 @@ def list_audit_logs(
                 "id": log["id"],
                 "user_id": log["user_id"],
                 "action": log["action"],
-                "ip_address": log["ip"],
+                "ip_address": log["ip_address"],
                 "user_agent": log["user_agent"],
                 "meta": json.loads(log["meta"]) if log["meta"] else {},
                 "timestamp": log["created_at"].isoformat() if log["created_at"] else None,

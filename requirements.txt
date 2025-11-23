@@ -17,5 +17,7 @@ Authlib
 alembic
 pydantic[email]
 argon2-cffi
-asyncpg
+#asyncpg
 psycopg2-binary
+stripe
+httpx  # For geolocation API calls (already listed above, but ensuring it's present)

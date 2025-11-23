@@ -38,7 +38,13 @@ CREATE TABLE IF NOT EXISTS users (
     is_verified BOOLEAN DEFAULT FALSE,
     role TEXT DEFAULT 'student',
     consent BOOLEAN DEFAULT FALSE,
+    two_factor_enabled BOOLEAN DEFAULT FALSE,
+    two_factor_secret TEXT,
+    profile_picture TEXT,
+    oauth_provider TEXT,
+    oauth_provider_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP
 );
 
@@ -46,11 +52,13 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    session_token TEXT UNIQUE NOT NULL,
+    refresh_token TEXT UNIQUE,
     user_agent TEXT,
-    ip_address TEXT,
+    ip TEXT,
+    device_info TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP NOT NULL,
+    last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
     revoked BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -123,8 +131,11 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
     action TEXT NOT NULL,
-    details TEXT,
+    resource TEXT,
     ip_address TEXT,
+    user_agent TEXT,
+    status TEXT DEFAULT 'success',
+    meta TEXT DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
@@ -137,25 +148,41 @@ CREATE TABLE IF NOT EXISTS courses (
     instructor TEXT,
     duration TEXT,
     level TEXT,
+    price REAL,
     category TEXT,
     image_url TEXT,
     published BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Blogs table
 CREATE TABLE IF NOT EXISTS blogs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
-    excerpt TEXT,
+    slug TEXT UNIQUE NOT NULL,
+    excerpt TEXT NOT NULL,
     content TEXT NOT NULL,
-    author TEXT,
+    author TEXT NOT NULL,
     category TEXT,
+    categories TEXT DEFAULT '[]',
+    tags TEXT DEFAULT '[]',
     image_url TEXT,
+    image_alt TEXT,
+    featured BOOLEAN DEFAULT FALSE,
+    meta_title TEXT,
+    meta_description TEXT,
+    canonical_url TEXT,
+    og_title TEXT,
+    og_description TEXT,
+    og_image_url TEXT,
+    og_image_alt TEXT,
+    word_count INTEGER DEFAULT 0,
+    reading_time REAL DEFAULT 0.0,
     published BOOLEAN DEFAULT FALSE,
     publish_at TIMESTAMP,
-    tags TEXT DEFAULT '[]',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Categories table
@@ -212,7 +239,13 @@ CREATE TABLE IF NOT EXISTS users (
     is_verified BOOLEAN DEFAULT FALSE,
     role TEXT DEFAULT 'student',
     consent BOOLEAN DEFAULT FALSE,
+    two_factor_enabled BOOLEAN DEFAULT FALSE,
+    two_factor_secret TEXT,
+    profile_picture TEXT,
+    oauth_provider TEXT,
+    oauth_provider_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP
 );
 
@@ -220,11 +253,13 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS sessions (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
-    session_token TEXT UNIQUE NOT NULL,
+    refresh_token TEXT UNIQUE,
     user_agent TEXT,
-    ip_address TEXT,
+    ip TEXT,
+    device_info TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP NOT NULL,
+    last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
     revoked BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -297,8 +332,11 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     id SERIAL PRIMARY KEY,
     user_id INTEGER,
     action TEXT NOT NULL,
-    details TEXT,
+    resource TEXT,
     ip_address TEXT,
+    user_agent TEXT,
+    status TEXT DEFAULT 'success',
+    meta TEXT DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
@@ -311,25 +349,41 @@ CREATE TABLE IF NOT EXISTS courses (
     instructor TEXT,
     duration TEXT,
     level TEXT,
+    price NUMERIC(10, 2),
     category TEXT,
     image_url TEXT,
     published BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Blogs table
 CREATE TABLE IF NOT EXISTS blogs (
     id SERIAL PRIMARY KEY,
     title TEXT NOT NULL,
-    excerpt TEXT,
+    slug TEXT UNIQUE NOT NULL,
+    excerpt TEXT NOT NULL,
     content TEXT NOT NULL,
-    author TEXT,
+    author TEXT NOT NULL,
     category TEXT,
+    categories TEXT DEFAULT '[]',
+    tags TEXT DEFAULT '[]',
     image_url TEXT,
+    image_alt TEXT,
+    featured BOOLEAN DEFAULT FALSE,
+    meta_title TEXT,
+    meta_description TEXT,
+    canonical_url TEXT,
+    og_title TEXT,
+    og_description TEXT,
+    og_image_url TEXT,
+    og_image_alt TEXT,
+    word_count INTEGER DEFAULT 0,
+    reading_time REAL DEFAULT 0.0,
     published BOOLEAN DEFAULT FALSE,
     publish_at TIMESTAMP,
-    tags TEXT DEFAULT '[]',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Categories table
@@ -369,8 +423,12 @@ ON CONFLICT (name) DO NOTHING;
 """
 
 
-def init_database():
-    """Initialize database with all tables"""
+def init_database(drop_existing=False):
+    """Initialize database with all tables
+    
+    Args:
+        drop_existing: If True, drops all existing tables before recreating them
+    """
     print(f"🔗 Connecting to database: {settings.DATABASE_URL}")
     
     # Determine if we're using PostgreSQL
@@ -394,6 +452,37 @@ def init_database():
         # Choose appropriate SQL based on database type
         sql = CREATE_TABLES_POSTGRESQL if is_postgres else CREATE_TABLES_SQL
         print(f"  📝 Using {'PostgreSQL' if is_postgres else 'SQLite'} SQL syntax")
+        
+        # Drop existing tables if requested
+        if drop_existing:
+            print("  ⚠️  DROP MODE: Dropping all existing tables...")
+            if is_postgres:
+                drop_query = """
+                    DO $$ 
+                    DECLARE
+                        r RECORD;
+                    BEGIN
+                        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                            EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+                        END LOOP;
+                    END $$;
+                """
+            else:
+                # For SQLite, get all tables and drop them
+                verify_query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%%'"
+                result = connection.execute(text(verify_query))
+                tables_to_drop = [row[0] for row in result]
+                for table in tables_to_drop:
+                    drop_query = f"DROP TABLE IF EXISTS {table}"
+                    connection.execute(text(drop_query))
+                    print(f"    🗑️  Dropped table: {table}")
+                connection.commit()
+                drop_query = None
+            
+            if drop_query:
+                connection.execute(text(drop_query))
+                connection.commit()
+                print("  ✅ All existing tables dropped")
         
         # Get existing tables before execution
         print("  🔍 Checking existing tables...")
@@ -540,12 +629,27 @@ def init_database():
 
 
 if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Initialize LMS database')
+    parser.add_argument('--drop', action='store_true', 
+                       help='Drop all existing tables before recreating them')
+    args = parser.parse_args()
+    
     print("=" * 60)
     print("🚀 LMS Database Initialization Script")
     print("=" * 60)
     print()
     
-    init_database()
+    if args.drop:
+        print("⚠️  WARNING: You are about to DROP all existing tables!")
+        confirm = input("Type 'YES' to confirm: ")
+        if confirm != 'YES':
+            print("❌ Operation cancelled")
+            sys.exit(1)
+        print()
+    
+    init_database(drop_existing=args.drop)
     
     print()
     print("=" * 60)

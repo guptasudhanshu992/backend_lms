@@ -31,9 +31,19 @@ class LoginIn(BaseModel):
 def register(payload: RegisterIn):
     try:
         user = auth_service.register_user(payload.email, payload.password, payload.consent)
-        return {"ok": True, "user": {"id": user.id, "email": user.email}}
+        return {
+            "ok": True, 
+            "message": "Registration successful. Please check your email to verify your account.",
+            "user": {
+                "id": user["id"], 
+                "email": user["email"],
+                "is_verified": user["is_verified"]
+            }
+        }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 
 @router.post('/login')
